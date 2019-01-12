@@ -182,43 +182,19 @@ public:
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
-		//Left motor setup
-//		leftLeader.ClearStickyFaults(0);
-		//rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
-//		leftLeader.ConfigNominalOutputForward(0, 0);
-//		leftLeader.ConfigNominalOutputReverse(0, 0);
-//		leftLeader.ConfigPeakOutputForward(1, 0);
-//		leftLeader.ConfigPeakOutputReverse(-1, 0);
-//		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-//		leftLeader.ConfigMotionCruiseVelocity(0, 0);
+		// PID Setup
+		// leftLeader.Config_kP(Constant::pidChannel, .09, 0);
+		// leftLeader.Config_kI(Constant::pidChannel, 0, 0);
+		// leftLeader.Config_kD(Constant::pidChannel, 0, 0);
+		// leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-//		leftLeader.ConfigMotionAcceleration(0, 0);
-//		leftLeader.SetSensorPhase(false);
-//		leftLeader.SetInverted(true);
+		// rightLeader.Config_kP(Constant::pidChannel, .09, 0);
+		// rightLeader.Config_kI(Constant::pidChannel, 0, 0);
+		// rightLeader.Config_kD(Constant::pidChannel, 0, 0);
+		// rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-//		leftFollower.ConfigNominalOutputForward(0, 0);
-//		leftFollower.ConfigNominalOutputReverse(0, 0);
-//		leftFollower.ConfigPeakOutputForward(1, 0);
-//		leftFollower.ConfigPeakOutputReverse(-1, 0);
-//		leftFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-//		leftFollower.ConfigMotionCruiseVelocity(0, 0);
-//		leftFollower.ConfigMotionAcceleration(0, 0);
-//		leftFollower.SetSensorPhase(false);
-//		leftFollower.SetInverted(true);
-
-// PID Setup
-//				leftLeader.Config_kP(Constant::pidChannel, .09, 0);
-//				leftLeader.Config_kI(Constant::pidChannel, 0, 0);
-//				leftLeader.Config_kD(Constant::pidChannel, 0, 0);
-//				leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
-//
-//				rightLeader.Config_kP(Constant::pidChannel, .09, 0);
-//				rightLeader.Config_kI(Constant::pidChannel, 0, 0);
-//				rightLeader.Config_kD(Constant::pidChannel, 0, 0);
-//				rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
-
-				rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
-				leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
+		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
 
 	}
 
