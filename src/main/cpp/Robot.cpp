@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 
+
 #include <frc/WPILib.h>
 
 #include <frc/liveWindow/LiveWindow.h>
@@ -19,6 +20,7 @@
 #include "ctre/Phoenix.h"
 #include "Constant.h"
 
+#include "AHRS.h"
 #include <frc/Joystick.h>
 #include <frc/XboxController.h>
 
@@ -41,6 +43,11 @@ private:
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
+
+	//wether input comes from joystick or auton
+	bool isAuton = false;
+
+	AHRS *gyro = new AHRS(SPI::Port::kMXP);
 
 	TalonSRX leftLeader {Constant::LeftLeaderID};
 	TalonSRX leftFollower {Constant::LeftFollowerID};
@@ -107,6 +114,9 @@ public:
 	{
 
 		Drive();
+		std::cout << gyro->GetAngle() << std::endl;
+		//Colin said to remove this line
+		//std::cout << rightLeader<< std::endl;
 	}
 
 	void TestPeriodic() {}
@@ -114,10 +124,15 @@ public:
 	void Drive() {
 		UpdateJoystickTank();
 
-		//Right motor move, negative value = forward
-		leftTarget = leftjoyY;
-		rightTarget = rightjoyY;
+		if(isAuton){
 
+		}
+		else
+		{
+			//Right motor move, negative value = forward
+			leftTarget = leftjoyY / 3;
+			rightTarget = rightjoyY / 3;
+		}
 
 
 		leftLeader.Set(ControlMode::PercentOutput, leftTarget);
