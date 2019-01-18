@@ -1,11 +1,14 @@
+#define VISION_HEADER 0x6101FEED
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <csignal>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <wiringSerial.h>
 #include <opencv2/opencv.hpp>
 using namespace cv;
 
@@ -21,6 +24,7 @@ typedef struct {
 } point_t;
 #pragma pack(pop)
 #define mpx(v) *(pixel_t*)(v);
+#define cti(x, y) (((uint32_t)x << 16) | y)
 
 uchar pixel_threshold = 192-32;
 double brightness = 0.25;
@@ -51,7 +55,9 @@ void atexit(int signal) {
     exit(10);
 }
 
-int main() {
+bool verbose = false;
+
+int main(int argc, const char * argv[]) {
     // Set up capture
     VideoCapture capture(0);
     VideoWriter output("output.avi", CV_FOURCC('M', 'J', 'P', 'G'), 15, Size(640, 480*2));
@@ -59,10 +65,15 @@ int main() {
     capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
     capture.set(CV_CAP_PROP_CONTRAST, 1.0);
     capture.set(CV_CAP_PROP_BRIGHTNESS, brightness);
-    if(!capture.isOpened()){
+    if(!capture.isOpened()) {
         std::cerr << "Failed to connect to the camera.\n";
         return 1;
     }
+    int serout = serialOpen("/dev/ttyS0", 9600);
+    #ifdef TFMINI
+    int serin = serialOpen("/dev/ttyUSB0", 115200);
+    #endif
+    if (argc > 1) verbose = true;
     signal(SIGINT, atexit);
     signal(SIGKILL, atexit);
     signal(SIGTERM, atexit);
@@ -71,9 +82,11 @@ int main() {
     fcntl (0, F_SETFL, O_NONBLOCK);
     std::cerr << "Press + or - to change threshold\n";
     while (true) {
+        uint32_t frames[8];
+        frames[0] = VISION_HEADER;
         Mat frame, edges(Size(640, 480), CV_8UC1), denoised, cdst(Size(640, 480*2), CV_8UC3);
         capture >> frame;
-        if(frame.empty()){
+        if(frame.empty()) {
             std::cerr << "Failed to capture an image.\n";
             return 2;
         }
@@ -114,37 +127,44 @@ int main() {
         if (contours.size() < 1) continue;
         //for(int i=0; i<1; ++i)
         int i = 0;
-        {
-            // fit bounding rectangle around contour
-            cv::RotatedRect rotatedRect = cv::minAreaRect(contours[i]);
+        // fit bounding rectangle around contour
+        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[i]);
 
-            // read points and angle
-            cv::Point2f rect_points[4]; 
-            rotatedRect.points( rect_points );
+        // read points and angle
+        cv::Point2f rect_points[4]; 
+        rotatedRect.points( rect_points );
 
-            float  angle = rotatedRect.angle; // angle
-            // choose the longer edge of the rotated rect to compute the angle
-            cv::Point2f edge1 = cv::Vec2f(rect_points[1].x, rect_points[1].y) - cv::Vec2f(rect_points[0].x, rect_points[0].y);
-            cv::Point2f edge2 = cv::Vec2f(rect_points[2].x, rect_points[2].y) - cv::Vec2f(rect_points[1].x, rect_points[1].y);
+        float  angle = rotatedRect.angle; // angle
+        // choose the longer edge of the rotated rect to compute the angle
+        cv::Point2f edge1 = cv::Vec2f(rect_points[1].x, rect_points[1].y) - cv::Vec2f(rect_points[0].x, rect_points[0].y);
+        cv::Point2f edge2 = cv::Vec2f(rect_points[2].x, rect_points[2].y) - cv::Vec2f(rect_points[1].x, rect_points[1].y);
 
-            cv::Point2f usedEdge = edge1;
-            if(cv::norm(edge2) > cv::norm(edge1))
-                usedEdge = edge2;
+        cv::Point2f usedEdge = edge1;
+        if(cv::norm(edge2) > cv::norm(edge1))
+            usedEdge = edge2;
 
-            cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
+        cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
 
 
-            angle = 180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)));
-            if (angle == 90.0 || angle == -90.0 || angle == 0.0) continue;
-            // read center of rotated rect
-            cv::Point2f center = rotatedRect.center; // center
+        angle = 180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)));
+        angle -= 90.0;            
+        if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) continue;
+        // read center of rotated rect
+        cv::Point2f center = rotatedRect.center; // center
 
-            // draw rotated rect
-            for(unsigned int j=0; j<4; ++j)
-                cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
+        // draw rotated rect
+        for(unsigned int j=0; j<4; ++j)
+            cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
 
-            // draw center and print text
-            if (!isnan(angle - 90.0)) std::cerr << angle - 90.0 << "\n";
+        if (isnan(angle)) continue;
+        frames[1] = reinterpret_cast<uint32_t>(angle);
+
+        // get LiDAR data
+        serialPuts(serin, "\x4257020000000106");
+        char lidar_data[9];
+
+        // output final image
+        if (verbose) {
             std::vector<uchar> buf;
             imencode(".jpg", cdst, buf);
             std::cout << std::string((char*)&buf[0], buf.size());
