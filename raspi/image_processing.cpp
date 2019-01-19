@@ -1,4 +1,5 @@
-#define VISION_HEADER 0x6101FEED
+#define VISION_HEADER __builtin_bswap32(0x6101FEED)
+#define VISION_INFO __builtin_bswap32(0x6101DA7A)
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -29,33 +30,31 @@ typedef struct {
 uchar pixel_threshold = 192-32;
 double brightness = 0.25;
 
-static struct termios orig_termios;  /* TERMinal I/O Structure */
-static int ttyfd = STDIN_FILENO;     /* STDIN_FILENO is 0 by default */
-/* put terminal in raw mode - see termio(7I) for modes */
-void tty_raw(void)
-   {
-    struct termios new_tio;
-	unsigned char c;
+/* 
+serial frame:
+| B | Contents |
+| 4 | Header   |
+| 4 | Angle    |
+| 4 | Line     |
+| 2 | Distance |
+| 2 | Checksum |
 
-	/* get the terminal settings for stdin */
-	tcgetattr(STDIN_FILENO,&orig_termios);
-
-	/* we want to keep the old setting to restore them a the end */
-	new_tio=orig_termios;
-
-	/* disable canonical mode (buffered i/o) and local echo */
-	new_tio.c_lflag &=(~ICANON & ~ECHO);
-
-	/* set the new settings immediately */
-	tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
-   }
-
-void atexit(int signal) {
-    tcsetattr(ttyfd,TCSAFLUSH,&orig_termios);
-    exit(10);
-}
-
+info frame:
+| B | Contents |
+| 4 | Header   |
+| 1 | Threshold|
+| 9 | Null     |
+| 2 | Checksum |
+ */
 bool verbose = false;
+
+void outputImage(Mat cdst) {
+    if (verbose) {
+        std::vector<uchar> buf;
+        imencode(".jpg", cdst, buf);
+        std::cout << std::string((char*)&buf[0], buf.size());
+    }
+}
 
 int main(int argc, const char * argv[]) {
     // Set up capture
@@ -74,15 +73,18 @@ int main(int argc, const char * argv[]) {
     int serin = serialOpen("/dev/ttyUSB0", 115200);
     #endif
     if (argc > 1) verbose = true;
-    signal(SIGINT, atexit);
-    signal(SIGKILL, atexit);
-    signal(SIGTERM, atexit);
-    signal(SIGHUP, atexit);
-    tty_raw();
-    fcntl (0, F_SETFL, O_NONBLOCK);
-    std::cerr << "Press + or - to change threshold\n";
+    fcntl (serout, F_SETFL, O_NONBLOCK);
+    {
+        uint32_t frames[4];
+        frames[0] = VISION_INFO;
+        ((uint8_t*)(frames))[4] = pixel_threshold;
+        for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+        uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
+        ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+        ::write(serout, frames, 16);
+    }
     while (true) {
-        uint32_t frames[8];
+        uint32_t frames[4];
         frames[0] = VISION_HEADER;
         Mat frame, edges(Size(640, 480), CV_8UC1), denoised, cdst(Size(640, 480*2), CV_8UC3);
         capture >> frame;
@@ -91,9 +93,24 @@ int main(int argc, const char * argv[]) {
             return 2;
         }
         char c = 0;
-        ::read(0, &c, 1);
-        if (c == '=' || c == '+') std::cerr << "Threshold now " << (int)++pixel_threshold << "\n";
-        else if (c == '-' || c == '_') std::cerr << "Threshold now " << (int)--pixel_threshold << "\n";
+        if (serialDataAvail(serout)) c = serialGetchar(serout);
+        if (c == '=' || c == '+') {
+            frames[0] = VISION_INFO;
+            ((uint8_t*)(frames))[4] = ++pixel_threshold;
+            for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+            uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
+            ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+            ::write(serout, frames, 16);
+            frames[0] = VISION_HEADER;
+        } else if (c == '-' || c == '_') {
+            frames[0] = VISION_INFO;
+            ((uint8_t*)(frames))[4] = --pixel_threshold;
+            for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+            uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
+            ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+            ::write(serout, frames, 16);
+            frames[0] = VISION_HEADER;
+        }
         // Get min/max values
         uchar min = 255, max = 0;
         for (int x = 0; x < frame.rows; x++) {
@@ -124,7 +141,7 @@ int main(int argc, const char * argv[]) {
         // extract contours
         std::vector<std::vector<cv::Point> > contours;
         cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-        if (contours.size() < 1) continue;
+        if (contours.size() < 1) {outputImage(cdst); continue;}
         //for(int i=0; i<1; ++i)
         int i = 0;
         // fit bounding rectangle around contour
@@ -145,7 +162,6 @@ int main(int argc, const char * argv[]) {
 
         cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
 
-
         angle = 180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)));
         angle -= 90.0;            
         if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) continue;
@@ -156,19 +172,35 @@ int main(int argc, const char * argv[]) {
         for(unsigned int j=0; j<4; ++j)
             cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
 
-        if (isnan(angle)) continue;
-        frames[1] = reinterpret_cast<uint32_t>(angle);
+        if (isnan(angle)) {outputImage(cdst); continue;}
+        frames[1] = *(uint32_t*)(&angle);
+        
+        // Calculate offset
+        float distance = (int)center.x - 320.0;
+        float edgeLength = sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
+        float multiplier = distance / edgeLength;
+        // Game manual says the length of the tape is 2"/5.08 cm,
+        // we can find the distance from the center using the multiplier
+        float cmDistance = multiplier * 5.08;
+        float inchDistance = multiplier * 2.0;
+        frames[2] = *(uint32_t*)(&cmDistance);
+        //std::cerr << cmDistance << "\n";
+        if (verbose) cv::line(cdst, Point2f(320.0, 240.0), center, cv::Scalar(0, 255, 0));
 
-        // get LiDAR data
-        serialPuts(serin, "\x4257020000000106");
-        char lidar_data[9];
+        // TODO: get distance data
+        uint16_t * frames16 = (uint16_t*)frames;
+        frames16[6] = 0;
+
+        // get checksum
+        uint32_t sum = frames16[0] + frames16[1] + frames16[2] + 
+        frames16[3] + frames16[4] + frames16[5] + frames16[6];
+        frames16[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+
+        // send data out
+        ::write(serout, frames, 16);
 
         // output final image
-        if (verbose) {
-            std::vector<uchar> buf;
-            imencode(".jpg", cdst, buf);
-            std::cout << std::string((char*)&buf[0], buf.size());
-        }
+        outputImage(cdst);
     }
     return 0;
 }
