@@ -320,7 +320,7 @@ int main(int argc, const char * argv[]) {
         cv::gpu::GpuMat edges(Size(640, 480), CV_8UC1), denoised;
         gpu::GpuMat edges, denoised;
         #else
-        Mat edges(Size(640, 480), CV_8UC1), denoised;
+        Mat bw, edges(Size(640, 480), CV_8UC1), denoised;
         #endif
         capture >> frame;
         if(frame.empty()) {
@@ -348,7 +348,8 @@ int main(int argc, const char * argv[]) {
         }
         // Get min/max values
         double min = 0, max = 0;
-        
+        cvtColor(frame, bw, CV_BGR2GRAY);
+        minMaxLoc(bw, &min, &max);
         //std::cerr << "min = " << (int)min << ", max = " << (int)max << "\n";
         uchar thresh = ((max - min) * (pixel_threshold / 256.0)) + min;
         // Convert to B/W image
