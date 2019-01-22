@@ -116,9 +116,10 @@ public:
 	{
 
 		Drive();
-		std::cout << gyro->GetAngle() << std::endl;
+		//std::cout << gyro->GetAngle() << std::endl;
 		//Colin said to remove this line
-		//std::cout << rightLeader<< std::endl;
+		std::cout << rightLeader.GetSelectedSensorPosition() << std::endl;
+		std::cout << leftLeader.GetSelectedSensorPosition() << std::endl;
 	}
 
 	void TestPeriodic() {}
@@ -132,10 +133,10 @@ public:
 		else
 		{
 			//Right motor move, negative value = forward
-			leftTarget = leftjoyY / 3;  //TODO remove the / 3
-			std:cout << "leftTarget: " << leftTarget << std::endl;
-			rightTarget = rightjoyY / 3;  //TODO remove the / 3
-			std:cout << "rightTarget: " << rightTarget << std::endl;
+			leftTarget = leftjoyY;
+      std:cout << "leftTarget: " << leftTarget << std::endl;
+			rightTarget = rightjoyY;
+      std:cout << "rightTarget: " << rightTarget << std::endl;
 		}
 
 
@@ -146,10 +147,10 @@ public:
 		//Right motor move
 		rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
-		std::cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
-		std::cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
-		std::cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
-		std::cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
+		//std::cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
+		//std::cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
+		//std::cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
+		//std::cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
 	}
 
 	void SetupMoters()
