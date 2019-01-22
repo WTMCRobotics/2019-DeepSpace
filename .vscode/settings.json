@@ -54,6 +54,10 @@
     "type_traits": "cpp",
     "tuple": "cpp",
     "typeinfo": "cpp",
-    "utility": "cpp"
+    "utility": "cpp",
+    "csignal": "cpp",
+    "iomanip": "cpp",
+    "optional": "cpp",
+    "string_view": "cpp"
   }
 }
