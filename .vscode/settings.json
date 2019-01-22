@@ -59,5 +59,6 @@
     "iomanip": "cpp",
     "optional": "cpp",
     "string_view": "cpp"
-  }
+  },
+  "C_Cpp.default.configurationProvider": "vscode-wpilib"
 }
