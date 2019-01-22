@@ -139,7 +139,7 @@ public:
 		}
 
 
-		leftLeader.Set(ControlMode::PercentOutput, leftTarget);
+		leftLeader.Set(ControlMode::PercentOutput, lefttarget);
 		//leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, leftLeader.GetMotorOutputPercent());
 		//leftFollower.Set(ControlMode::PercentOutput, leftTarget);
 
