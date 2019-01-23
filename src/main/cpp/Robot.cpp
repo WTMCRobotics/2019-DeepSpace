@@ -24,6 +24,8 @@
 #include <frc/Joystick.h>
 #include <frc/XboxController.h>
 
+#include "Vision.h"
+
 using namespace frc;
 
 class Robot : public frc::TimedRobot
@@ -47,7 +49,6 @@ private:
 	//wether input comes from joystick or auton
 	bool isAuton = false;
 	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
-	float raspiInputs [4] = {0};  //  0 = Angle | 1 = distance Y | 2 = alignment X | 3 = disance ultrasonic
 
 	AHRS *gyro = new AHRS(SPI::Port::kMXP);
 
@@ -55,6 +56,9 @@ private:
 	TalonSRX leftFollower {Constant::LeftFollowerID};
 	TalonSRX rightLeader {Constant::RightLeaderID};
 	TalonSRX rightFollower {Constant::RightFollowerID};
+	
+	SerialPort serial(9600);
+	uint8 vision_threshold;
 
 public:
 	void RobotInit()
@@ -221,11 +225,12 @@ public:
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput()
 	{
-		//TODO make this actualy do something
-		raspiInputs[0] = 0;
-		raspiInputs[1] = 0;
-		raspiInputs[2] = 0;
-		raspiInputs[3] = 0;
+		vision_frame_t frame = getFrame(&serial);
+		if (frameIsInfo(frame)) {
+			vision_info_t vinfo = getInfo(frame);
+			vision_threshold = (uint8)vinfo.threshold;
+		}
+		// TODO: Make the robot actually do stuff
 	}
 
 
