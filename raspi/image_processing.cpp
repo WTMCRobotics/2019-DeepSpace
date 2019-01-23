@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <termios.h>
 //#include <wiringSerial.h>
+#pragma region 
 /*
  * wiringSerial.c:
  *	Handle a serial port
@@ -233,10 +234,20 @@ int serialGetchar (const int fd)
 
   return ((int)x) & 0xFF ;
 }
+#pragma endregion
 #include <chrono>
 #include <opencv2/opencv.hpp>
 using namespace cv;
 using namespace std::chrono;
+
+#define JETSON // define if on jetson, undefine if on raspi
+//#define CUDA // define to use GPU processing
+//#define SILENT // define to disable time checking
+//#define TFMINI // define if using TFmini LiDAR (not working)
+
+#ifdef CUDA
+#include <opencv2/gpu/gpu.hpp>
+#endif
 
 #pragma pack(push, 1)
 typedef struct {
@@ -267,27 +278,31 @@ serial frame:
 info frame:
 | B | Contents |
 | 4 | Header   |
-| 1 | Threshold|
-| 9 | Null     |
+| 4 | Threshold|
+| 6 | Null     |
 | 2 | Checksum |
  */
 bool verbose = false;
 steady_clock::time_point t;
+std::vector<int> times;
 
 void outputImage(Mat cdst, bool success) {
     if (verbose) {
         std::vector<uchar> buf;
         imencode(".jpg", cdst, buf);
         std::cout << std::string((char*)&buf[0], buf.size());
-        if (success) std::cerr << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
-        else std::cerr << "Failed to get frame\n";
     }
+    #ifndef SILENT
+    if (success) {
+        std::cerr << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
+        times.push_back((duration_cast<milliseconds>(steady_clock::now() - t)).count());
+    } else std::cerr << "Failed to get frame\n";
+    #endif
 }
 
 int main(int argc, const char * argv[]) {
     // Set up capture
     VideoCapture capture(0);
-    VideoWriter output("output.avi", CV_FOURCC('M', 'J', 'P', 'G'), 15, Size(640, 480*2));
     capture.set(CV_CAP_PROP_FRAME_WIDTH, 640);
     capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
     capture.set(CV_CAP_PROP_CONTRAST, 1.0);
@@ -296,7 +311,11 @@ int main(int argc, const char * argv[]) {
         std::cerr << "Failed to connect to the camera.\n";
         return 1;
     }
+    #ifdef JETSON
+    int serout = serialOpen("/dev/ttyTHS2", 9600);
+    #else
     int serout = serialOpen("/dev/ttyS0", 9600);
+    #endif
     #ifdef TFMINI
     int serin = serialOpen("/dev/ttyUSB0", 115200);
     #endif
@@ -305,9 +324,9 @@ int main(int argc, const char * argv[]) {
     {
         uint32_t frames[4];
         frames[0] = VISION_INFO;
-        ((uint8_t*)(frames))[4] = pixel_threshold;
-        for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-        uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
+        ((float*)(frames))[1] = (float)pixel_threshold;
+        for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+        uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
         ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
         ::write(serout, frames, 16);
     }
@@ -315,12 +334,11 @@ int main(int argc, const char * argv[]) {
         t = steady_clock::now();
         uint32_t frames[4];
         frames[0] = VISION_HEADER;
-        Mat frame, cdst(Size(640, 480*2), CV_8UC3);
+        Mat frame, cdst(Size(640, 480*2), CV_8UC3), edges;
         #ifdef CUDA
-        cv::gpu::GpuMat edges(Size(640, 480), CV_8UC1), denoised;
-        gpu::GpuMat edges, denoised;
+        cv::gpu::GpuMat gpuframe, bw, gpuedges;
         #else
-        Mat bw, edges(Size(640, 480), CV_8UC1), denoised;
+        Mat bw;
         #endif
         capture >> frame;
         if(frame.empty()) {
@@ -328,31 +346,48 @@ int main(int argc, const char * argv[]) {
             return 2;
         }
         char c = 0;
-        if (serialDataAvail(serout)) c = serialGetchar(serout);
-        if (c == '=' || c == '+') {
-            frames[0] = VISION_INFO;
-            ((uint8_t*)(frames))[4] = ++pixel_threshold;
-            for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-            uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
-            ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-            ::write(serout, frames, 16);
-            frames[0] = VISION_HEADER;
-        } else if (c == '-' || c == '_') {
-            frames[0] = VISION_INFO;
-            ((uint8_t*)(frames))[4] = --pixel_threshold;
-            for (int i = 5; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-            uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]);
-            ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-            ::write(serout, frames, 16);
-            frames[0] = VISION_HEADER;
+        if (serialDataAvail(serout)) {
+            c = serialGetchar(serout);
+            if (c == '=' || c == '+') {
+                frames[0] = VISION_INFO;
+                ((float*)(frames))[1] = (float)++pixel_threshold;
+                for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+                uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
+                ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+                ::write(serout, frames, 16);
+                frames[0] = VISION_HEADER;
+            } else if (c == '-' || c == '_') {
+                frames[0] = VISION_INFO;
+                ((float*)(frames))[1] = (float)--pixel_threshold;
+                for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+                uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
+                ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+                ::write(serout, frames, 16);
+                frames[0] = VISION_HEADER;
+            }
         }
+        if (verbose) frame.copyTo(cdst(Rect(0, 480, 640, 480)));
         // Get min/max values
         double min = 0, max = 0;
+        #ifdef CUDA
+        gpuframe.upload(frame);
+        cv::gpu::cvtColor(gpuframe, bw, CV_BGR2GRAY);
+        cv::gpu::minMaxLoc(bw, &min, &max);
+        #else
         cvtColor(frame, bw, CV_BGR2GRAY);
         minMaxLoc(bw, &min, &max);
+        #endif
         //std::cerr << "min = " << (int)min << ", max = " << (int)max << "\n";
         uchar thresh = ((max - min) * (pixel_threshold / 256.0)) + min;
         // Convert to B/W image
+        #ifdef CUDA
+        cv::gpu::threshold(bw, gpuedges, (double)thresh, 255.0, THRESH_BINARY);
+        gpuedges.download(edges);
+        #else
+        threshold(bw, edges, (double)thresh, 255.0, THRESH_BINARY);
+        #endif
+        if (verbose) edges.copyTo(cdst(Rect(0, 0, 640, 480)));
+        /*
         std::vector<bool> lastRow(640, 0);
         for (int x = 0; x < frame.rows; x++) {
             bool lastValue = false;
@@ -366,21 +401,19 @@ int main(int argc, const char * argv[]) {
                 lastValue = avg >= thresh;
                 lastRow[y] = lastValue;
             }
-        }
+        }*/
         // extract contours
         std::vector<std::vector<cv::Point> > contours;
         cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
         if (contours.size() < 1) {outputImage(cdst, false); continue;}
-        //for(int i=0; i<1; ++i)
-        int i = 0;
         // fit bounding rectangle around contour
-        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[i]);
+        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[0]);
 
         // read points and angle
         cv::Point2f rect_points[4]; 
         rotatedRect.points( rect_points );
 
-        float  angle = rotatedRect.angle; // angle
+        float angle = rotatedRect.angle; // angle
         // choose the longer edge of the rotated rect to compute the angle
         cv::Point2f edge1 = cv::Vec2f(rect_points[1].x, rect_points[1].y) - cv::Vec2f(rect_points[0].x, rect_points[0].y);
         cv::Point2f edge2 = cv::Vec2f(rect_points[2].x, rect_points[2].y) - cv::Vec2f(rect_points[1].x, rect_points[1].y);
@@ -391,30 +424,28 @@ int main(int argc, const char * argv[]) {
 
         cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
 
-        angle = 180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)));
-        angle -= 90.0;            
-        if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) continue;
+        angle = (180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)))) - 90.0;
+        if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) {outputImage(cdst, false); continue;}
         // read center of rotated rect
         cv::Point2f center = rotatedRect.center; // center
 
         // draw rotated rect
-        for(unsigned int j=0; j<4; ++j)
-            cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
+        if (verbose)
+            for(unsigned int j=0; j<4; ++j)
+                cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
 
         if (isnan(angle)) {outputImage(cdst, false); continue;}
         frames[1] = *(uint32_t*)(&angle);
         
         // Calculate offset
-        float distance = (int)center.x - 320.0;
-        float edgeLength = sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
-        float multiplier = distance / edgeLength;
+        float multiplier = (center.x - 320.0) / sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
         // Game manual says the length of the tape is 2"/5.08 cm,
         // we can find the distance from the center using the multiplier
         float cmDistance = multiplier * 5.08;
         float inchDistance = multiplier * 2.0;
         frames[2] = *(uint32_t*)(&cmDistance);
         //std::cerr << cmDistance << "\n";
-        if (verbose) cv::line(cdst, Point2f(320.0, 240.0), Point2f(center.x, 240.0), cv::Scalar(0, 255, 0));
+        if (verbose) cv::line(cdst, Point2f(320.0, center.y), Point2f(center.x, center.y), cv::Scalar(0, 255, 0));
 
         // TODO: get distance data
         uint16_t * frames16 = (uint16_t*)frames;
