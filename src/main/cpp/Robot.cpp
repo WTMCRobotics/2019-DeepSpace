@@ -46,6 +46,8 @@ private:
 
 	//wether input comes from joystick or auton
 	bool isAuton = false;
+	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
+	float raspiInputs [4] = {0};  //  0 = Angle | 1 = distance Y | 2 = alignment X | 3 = disance ultrasonic
 
 	AHRS *gyro = new AHRS(SPI::Port::kMXP);
 
@@ -123,16 +125,18 @@ public:
 	void TestPeriodic() {}
 
 	void Drive() {
-		UpdateJoystickTank();
+		UpdateControllerInputs();
+		UpdateRaspiInput();
 
 		if(isAuton){
-
 		}
 		else
 		{
 			//Right motor move, negative value = forward
 			leftTarget = leftjoyY;
+      std:cout << "leftTarget: " << leftTarget << std::endl;
 			rightTarget = rightjoyY;
+      std:cout << "rightTarget: " << rightTarget << std::endl;
 		}
 
 
@@ -214,8 +218,18 @@ public:
 
 	}
 
+	//This Method will get inputs from raspi
+	void UpdateRaspiInput()
+	{
+		//TODO make this actualy do something
+		raspiInputs[0] = 0;
+		raspiInputs[1] = 0;
+		raspiInputs[2] = 0;
+		raspiInputs[3] = 0;
+	}
 
-	void UpdateJoystickTank()
+
+	void UpdateControllerInputs()
 	{
 		//Tank drive both stick
 		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
