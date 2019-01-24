@@ -2,14 +2,10 @@
 #define VISION_INFO __builtin_bswap32(0x6101DA7A)
 #include <iostream>
 #include <vector>
-#include <cmath>
-#include <cstdio>
 #include <cstdint>
 #include <csignal>
-#include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
-//#include <wiringSerial.h>
+// #include <wiringSerial.h>
 #pragma region 
 /*
  * wiringSerial.c:
@@ -249,23 +245,6 @@ using namespace std::chrono;
 #include <opencv2/gpu/gpu.hpp>
 #endif
 
-#pragma pack(push, 1)
-typedef struct {
-    uchar b;
-    uchar g;
-    uchar r;
-} pixel_t;
-typedef struct {
-    int x;
-    int y;
-} point_t;
-#pragma pack(pop)
-#define mpx(v) *(pixel_t*)(v);
-#define cti(x, y) (((uint32_t)x << 16) | y)
-
-uchar pixel_threshold = 192-32;
-double brightness = 0.25;
-
 /* 
 serial frame:
 | B | Contents |
@@ -282,6 +261,9 @@ info frame:
 | 6 | Null     |
 | 2 | Checksum |
  */
+
+uchar pixel_threshold = 160;
+double brightness = 0.25;
 bool verbose = false;
 steady_clock::time_point t;
 std::vector<int> times;
@@ -300,17 +282,25 @@ void outputImage(Mat cdst, bool success) {
     #endif
 }
 
+void getResults(int signal) {
+    int avg = 0;
+    for (int i : times) avg += i;
+    avg /= times.size();
+    std::cerr << "Average time = " << avg << " ms\n";
+    exit(0);
+}
+
 int main(int argc, const char * argv[]) {
     // Set up capture
     VideoCapture capture(0);
-    capture.set(CV_CAP_PROP_FRAME_WIDTH, 640);
-    capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
-    capture.set(CV_CAP_PROP_CONTRAST, 1.0);
-    capture.set(CV_CAP_PROP_BRIGHTNESS, brightness);
     if(!capture.isOpened()) {
         std::cerr << "Failed to connect to the camera.\n";
         return 1;
     }
+    capture.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+    capture.set(CV_CAP_PROP_CONTRAST, 1.0);
+    capture.set(CV_CAP_PROP_BRIGHTNESS, brightness);
     #ifdef JETSON
     int serout = serialOpen("/dev/ttyTHS2", 9600);
     #else
@@ -330,6 +320,11 @@ int main(int argc, const char * argv[]) {
         ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
         ::write(serout, frames, 16);
     }
+    signal(SIGINT, getResults);
+    signal(SIGTERM, getResults);
+    signal(SIGHUP, getResults);
+    signal(SIGKILL, getResults);
+    signal(SIGPIPE, getResults);
     while (true) {
         t = steady_clock::now();
         uint32_t frames[4];
