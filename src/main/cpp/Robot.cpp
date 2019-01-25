@@ -138,9 +138,9 @@ public:
 		{
 			//Right motor move, negative value = forward
 			leftTarget = leftjoyY;
-      std:cout << "leftTarget: " << leftTarget << std::endl;
+      std::cout << "leftTarget: " << leftTarget << std::endl;
 			rightTarget = rightjoyY;
-      std:cout << "rightTarget: " << rightTarget << std::endl;
+      std::cout << "rightTarget: " << rightTarget << std::endl;
 		}
 
 
