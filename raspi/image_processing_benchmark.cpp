@@ -1,7 +1,10 @@
 #define VISION_HEADER __builtin_bswap32(0x6101FEED)
 #define VISION_INFO __builtin_bswap32(0x6101DA7A)
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <cmath>
+#include <iomanip>
 #include <cstdint>
 #include <csignal>
 #include <chrono>
@@ -16,29 +19,51 @@ using namespace std::chrono;
 #endif
 
 uchar pixel_threshold = 160;
-double brightness = 0.25;
 steady_clock::time_point t;
-std::vector<int> times;
+steady_clock::time_point start = steady_clock::now();
+std::vector<int> frame_times, calc_times, total_times;
+int calc_time;
+int fails = 0;
 
 void outputImage(bool success) {
     if (success) {
-        std::cout << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
-        times.push_back((duration_cast<milliseconds>(steady_clock::now() - t)).count());
-    } else std::cout << "Failed to get frame\n";
+        int now = (duration_cast<milliseconds>(steady_clock::now() - t)).count();
+        //std::cout << "Got frame in " << calc_time << " ms, calculated info in " << now - calc_time << " ms, total " << now << " ms\n";
+        total_times.push_back(now);
+        frame_times.push_back(calc_time);
+        calc_times.push_back(now - calc_time);
+    } else {
+        std::cout << "Failed to calculate frame.\n";
+        fails++;
+    }
 }
 
-int main() {
+int main(int argc, const char * argv[]) {
     // Set up capture
-    VideoCapture capture("benchmark.avi");
+    //std::cout << getBuildInformation();
+    bool file = false;
+    if (argc > 1) {
+        if (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help") {
+            std::cout << "Usage: " << argv[0] << " [-c|-f]\nOptions:\n\t-c: Use camera input (default)\n\t-f: Use file input (inaccurate)\n";
+            return 0;
+        } else if (std::string(argv[1]) == "-f") file = true;
+    }
+    VideoCapture capture;
+    if (file) capture = VideoCapture("benchmark.avi");
+    else capture = VideoCapture(0);
     if(!capture.isOpened()) {
         std::cerr << "Failed to connect to the camera.\n";
         return 1;
     }
+    capture.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
     #ifdef CUDA
     std::cout << "CUDA is enabled. ";
     #endif
     std::cout << "Starting benchmark.\n";
-    while (true) {
+    t = steady_clock::now();
+    std::ofstream out("data.txt");
+    while (t - start < milliseconds(10000)) {
         t = steady_clock::now();
         uint32_t frames[4];
         frames[0] = VISION_HEADER;
@@ -50,6 +75,8 @@ int main() {
         #endif
         capture >> frame;
         if(frame.empty()) break;
+        calc_time = (duration_cast<milliseconds>(steady_clock::now() - t)).count();
+        //std::cout << "Got frame in " << calc_time << " ms\n";
         // Get min/max values
         double min = 0, max = 0;
         #ifdef CUDA
@@ -96,7 +123,7 @@ int main() {
         cv::Point2f center = rotatedRect.center; // center
 
         // draw rotated rect
-        if (isnan(angle)) {outputImage(false); continue;}
+        if (angle == NAN) {outputImage(false); continue;}
         frames[1] = *(uint32_t*)(&angle);
         
         // Calculate offset
@@ -117,17 +144,26 @@ int main() {
         frames16[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
 
         // send data out
-        std::cout << std::hex;
+        out << std::hex;
         for (int i = 0; i < 16; ++i)
-            std::cout << std::setfill('0') << std::setw(2) << (int)((char*)frames)[i] << " ";
-        std::cout << std::dec << std::endl;
+            out << std::setfill('0') << std::setw(2) << ((uint16_t)((char*)frames)[i] & 0xFF) << " ";
+        out << std::dec << std::endl;
 
         // output final image
         outputImage(true);
     }
-    int avg = 0;
-    for (int i : times) avg += i;
-    avg /= times.size();
-    std::cout << "Total frames = " << times.size() << ", average time = " << avg << " ms\n";
+    int total_avg = 0, frame_avg = 0, calc_avg = 0;
+    for (int i : total_times) total_avg += i;
+    total_avg /= total_times.size();
+    for (int i : frame_times) frame_avg += i;
+    frame_avg /= frame_times.size();
+    for (int i : calc_times) calc_avg += i;
+    calc_avg /= calc_times.size();
+    std::cout << "\nTotal frames = " << total_times.size() << ", failed frames = " << fails << "\n";
+    std::cout << "Averages:\n";
+    std::cout << "\tCamera capture: " << frame_avg << " ms\n";
+    std::cout << "\tPositional calculation: " << calc_avg << " ms\n";
+    std::cout << "\tTotal time spent: " << total_avg << " ms\n";
+    std::cout << "\tFrames per second: " << 1000.0 / (float)total_avg << " fps\n";
     return 0;
 }
