@@ -44,9 +44,18 @@ int main(int argc, const char * argv[]) {
     bool file = false;
     if (argc > 1) {
         if (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help") {
-            std::cout << "Usage: " << argv[0] << " [-c|-f]\nOptions:\n\t-c: Use camera input (default)\n\t-f: Use file input (inaccurate)\n";
+            std::cout << "Usage: " << argv[0] << " [-c|-f|-a]\nOptions:\n\t-c: Use camera input (default)\n\t-f: Use file input (inaccurate)\n\t-a: Run both tests\n";
             return 0;
         } else if (std::string(argv[1]) == "-f") file = true;
+        else if (std::string(argv[1]) == "-a") {
+            const char * argvv[2];
+            argvv[0] = argv[0];
+            argvv[1] = "-c";
+            int r = main(2, argvv);
+            if (r != 0) return r;
+            argvv[1] = "-f";
+            return main(2, argvv);
+        }
     }
     VideoCapture capture;
     if (file) capture = VideoCapture("benchmark.avi");
