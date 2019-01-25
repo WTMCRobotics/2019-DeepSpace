@@ -30,7 +30,6 @@ vision_frame_t getFrame(frc::SerialPort * serial) {
 }
 
 vision_info_t getInfo(vision_frame_t frame) {
-    if (!frameIsInfo(frame)) return;
     return *((vision_info_t*)&frame);
 }
 

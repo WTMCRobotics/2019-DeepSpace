@@ -2,7 +2,7 @@
 #define VISION_HEADER __builtin_bswap32(0x6101FEED)
 #define VISION_INFO __builtin_bswap32(0x6101DA7A)
 #include <cstdint>
-#include <SerialPort.h>
+#include <frc/SerialPort.h>
 
 // Vision frame struct
 typedef struct {
