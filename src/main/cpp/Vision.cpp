@@ -8,14 +8,14 @@ vision_frame_t getFrame(frc::SerialPort * serial) {
         // Scan for header, don't read until it aligns
         serial->Read(&byte1, 1);
         if (byte1 != 0x61) {
-            #ifdef DEBUG
+            #ifdef VISION_DEBUG
             std::cout << "Bad byte " << (int)byte1 << "\n";
             #endif
             continue;
         }
         serial->Read(&byte2, 1);
         if (byte2 != 0x01) {
-            #ifdef DEBUG
+            #ifdef VISION_DEBUG
             std::cout << "Bad byte 2 " << (int)byte2 << "\n";
             #endif
             continue;

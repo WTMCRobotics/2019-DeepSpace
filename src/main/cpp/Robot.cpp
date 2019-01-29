@@ -27,16 +27,17 @@
 #include "Vision.h"
 
 using namespace frc;
+using namespace std;
 
 class Robot : public frc::TimedRobot
 {
 
 private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
-	frc::SendableChooser<std::string> m_chooser;
-	const std::string kAutoNameDefault = "Default";
-	const std::string kAutoNameCustom = "My Auto";
-	std::string m_autoSelected;
+	frc::SendableChooser<string> m_chooser;
+	const string kAutoNameDefault = "Default";
+	const string kAutoNameCustom = "My Auto";
+	string m_autoSelected;
 
 	XboxController xboxController{0};
 	//Joystick joystick2, joystick2;
@@ -45,10 +46,18 @@ private:
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
+	//trigers
+	double rightTrigger;
+	double leftTrigger;
+	bool rightShoulder;
+	bool leftShoulder;
 
 	//wether input comes from joystick or auton
 	bool isAuton = false;
 	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
+
+	//raspi input
+	vision_frame_t frame;
 
 	AHRS *gyro = new AHRS(SPI::Port::kMXP);
 
@@ -57,10 +66,10 @@ private:
 	TalonSRX rightLeader {Constant::RightLeaderID};
 	TalonSRX rightFollower {Constant::RightFollowerID};
 	
-	SerialPort serial(9600);
-	uint8 vision_threshold;
+	uint8_t vision_threshold;
 
 public:
+	SerialPort serial_port = SerialPort(9600);
 	void RobotInit()
 	{
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
@@ -87,7 +96,7 @@ public:
 
 		// m_autoSelected = SmartDashboard::GetString("Auto Selector",
 		//		 kAutoNameDefault);
-		std::cout << "Auto selected: " << m_autoSelected << std::endl;
+		cout << "Auto selected: " << m_autoSelected << endl;
 
 		if (m_autoSelected == kAutoNameCustom)
 		{
@@ -101,6 +110,7 @@ public:
 
 	void AutonomousPeriodic()
 	{
+		Drive();
 		if (m_autoSelected == kAutoNameCustom)
 		{
 			// Custom Auto goes here
@@ -114,47 +124,87 @@ public:
 	void TeleopInit()
 	{
 		SetupMoters();
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+
+		cout << rightLeader.GetSelectedSensorPosition() << endl;
+		
+		//cout << works << endl;
 	}
 
 	void TeleopPeriodic()
 	{
-
+		//cout << driveDistance(6 * 3.14) << endl;
+		//driveDistance(1);
 		Drive();
-		//std::cout << gyro->GetAngle() << std::endl;
-		//Colin said to remove this line
-		std::cout << rightLeader.GetSelectedSensorPosition() << std::endl;
-		std::cout << leftLeader.GetSelectedSensorPosition() << std::endl;
+		//cout << gyro->GetAngle() << endl;
+		
+		//cout << rightLeader.GetSelectedSensorPosition() << endl;
+		//cout << leftLeader.GetSelectedSensorPosition() << endl;
 	}
-
-	void TestPeriodic() {}
 
 	void Drive() {
 		UpdateControllerInputs();
-		UpdateRaspiInput();
+		//UpdateRaspiInput();
 
-		if(isAuton){
+		if(isAuton) {
+			driveDistance(10);
 		}
-		else
-		{
-			//Right motor move, negative value = forward
+		else {
 			leftTarget = leftjoyY;
-      std::cout << "leftTarget: " << leftTarget << std::endl;
+      		//cout << "leftTarget: " << leftTarget << endl;
 			rightTarget = rightjoyY;
-      std::cout << "rightTarget: " << rightTarget << std::endl;
+      		//cout << "rightTarget: " << rightTarget << endl;
 		}
 
 
 		leftLeader.Set(ControlMode::PercentOutput, leftTarget);
-		//leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, leftLeader.GetMotorOutputPercent());
-		//leftFollower.Set(ControlMode::PercentOutput, leftTarget);
+		
 
 		//Right motor move
 		rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
-		//std::cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
-		//std::cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
-		//std::cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
-		//std::cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
+		//cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
+		//cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
+		//cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
+		//cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
+	}
+
+	bool AutonPositionDeadband(double value, int target) {
+		if (fabs(target - value) < Constant::autonPositionDeadbandVal) {
+			return true; 
+		} else {
+			return false;
+		}
+	}
+
+
+	bool driveDistance(double inches) {
+		// inches / circumference = number of rotations
+		// * pulsesPerRotationQuad = number of pulses in one rotation
+		// targetEncPos = position encoder should read
+		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+		int targetEncPos = 8192 * 10;
+		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+			return true;
+		}
+		cout << rightLeader.GetSelectedSensorPosition() << endl;
+
+//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+		//cout << targetEncPos << endl;
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
+
+
+//					// Forward = positive encoder position for left
+//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+//					// Forward = negative encoder position for right
+//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+
+		return false;
 	}
 
 	void SetupMoters()
@@ -167,10 +217,10 @@ public:
 		leftLeader.ConfigPeakOutputForward(1, 0);
 		leftLeader.ConfigPeakOutputReverse(-1, 0);
 		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		leftLeader.ConfigMotionCruiseVelocity(0, 0);
-		leftLeader.ConfigMotionAcceleration(0, 0);
+		leftLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		leftLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
 		leftLeader.SetSensorPhase(false);
-		leftLeader.SetInverted(true);
+		leftLeader.SetInverted(false);
 
 		leftFollower.ConfigNominalOutputForward(0, 0);
 		leftFollower.ConfigNominalOutputReverse(0, 0);
@@ -180,7 +230,7 @@ public:
 		leftFollower.ConfigMotionCruiseVelocity(0, 0);
 		leftFollower.ConfigMotionAcceleration(0, 0);
 		leftFollower.SetSensorPhase(false);
-		leftFollower.SetInverted(true);
+		leftFollower.SetInverted(false);
 
 
 		//Right motor setup
@@ -191,8 +241,8 @@ public:
 		rightLeader.ConfigPeakOutputForward(1, 0);
 		rightLeader.ConfigPeakOutputReverse(-1, 0);
 		rightLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		rightLeader.ConfigMotionCruiseVelocity(0, 0);
-		rightLeader.ConfigMotionAcceleration(0, 0);
+		rightLeader.ConfigMotionCruiseVelocity(Constant::rightMotionVel, 0);
+		rightLeader.ConfigMotionAcceleration(Constant::rightMotionAcc, 0);
 		rightLeader.SetSensorPhase(false);
 		rightLeader.SetInverted(true);
 
@@ -207,15 +257,15 @@ public:
 		rightFollower.SetInverted(true);
 
 		// PID Setup
-		// leftLeader.Config_kP(Constant::pidChannel, .09, 0);
-		// leftLeader.Config_kI(Constant::pidChannel, 0, 0);
-		// leftLeader.Config_kD(Constant::pidChannel, 0, 0);
-		// leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		leftLeader.Config_kP(Constant::pidChannel, .69, 0);
+		leftLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
+		leftLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
+		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-		// rightLeader.Config_kP(Constant::pidChannel, .09, 0);
-		// rightLeader.Config_kI(Constant::pidChannel, 0, 0);
-		// rightLeader.Config_kD(Constant::pidChannel, 0, 0);
-		// rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		rightLeader.Config_kP(Constant::pidChannel, .69, 0);
+		rightLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
+		rightLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
+		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
@@ -225,10 +275,10 @@ public:
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput()
 	{
-		vision_frame_t frame = getFrame(&serial);
+		frame = getFrame(&serial_port);
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
-			vision_threshold = (uint8)vinfo.threshold;
+			vision_threshold = (uint8_t)vinfo.threshold;
 		}
 		// TODO: Make the robot actually do stuff
 	}
@@ -239,6 +289,8 @@ public:
 		//Tank drive both stick
 		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+
+		
 
 #ifdef FINEMOTIONCONTROL
 		//If right trigger pressed
