@@ -39,6 +39,11 @@ private:
 	const string kAutoNameCustom = "My Auto";
 	string m_autoSelected;
 
+	//Robot properties
+	const float wheelCirc = 6 * 3.1415;
+	
+	
+
 	XboxController xboxController{0};
 	//Joystick joystick2, joystick2;
 	double leftjoyY;
@@ -194,7 +199,13 @@ public:
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
 		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+<<<<<<< HEAD
 		int targetEncPos = 8192 * inches;
+=======
+		
+		int targetEncPos = 8192 * 10;
+>>>>>>> 4ceb3d6894a4a5ac5f370ad082956848f9419846
+
 		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
