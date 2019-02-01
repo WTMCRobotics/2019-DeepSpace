@@ -58,7 +58,8 @@
     "csignal": "cpp",
     "iomanip": "cpp",
     "optional": "cpp",
-    "string_view": "cpp"
+    "string_view": "cpp",
+    "*.inc": "cpp"
   },
   "C_Cpp.default.configurationProvider": "vscode-wpilib"
 }
