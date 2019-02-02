@@ -232,7 +232,7 @@ public:
 		
 		
 
-			} else if(angel <= 0) {
+			} else if(angle <= 0) {
 
 		
 
