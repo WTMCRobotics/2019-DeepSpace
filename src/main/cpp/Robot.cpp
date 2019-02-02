@@ -226,7 +226,7 @@ public:
 			
 			int leftEncPos = 0.5 * angle * countsPerAngle;
 			int rightEncPos = 0.5 * -angle * countsPerAngle ;	
-
+		
 		} else if(wideAngle) {
 			
 			if (angle > 0 ) {
