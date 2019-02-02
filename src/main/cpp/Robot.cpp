@@ -222,27 +222,23 @@ public:
 	bool turnAngle(float angle, bool wideAngle) {
 		// positive angle is clockwise
 		// negative angle is counterclockwise
+		
 		if (!wideAngle) {
 			
-			int leftEncPos = 0.5 * angle * countsPerAngle;
-			int rightEncPos = 0.5 * -angle * countsPerAngle ;	
 		
 		} else if(wideAngle) {
 			
 			if (angle > 0 ) {
 		
-			int leftEncPos = angle * countsPerAngle;
+		
 
 			} else if(angel <= 0) {
 
-			int rightEncPos = angle * countsPerAngle;
+		
 
 			}	
 
 		}
-
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, leftEncPos);
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, rightEncPos);
 
 
 		return false;
