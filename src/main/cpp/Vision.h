@@ -9,7 +9,7 @@ typedef struct {
     uint32_t header;
     float angle;
     float line_offset;
-    uint16_t reserved_distance;
+    int16_t reserved_distance;
     uint16_t checksum;
 } vision_frame_t;
 
@@ -23,7 +23,7 @@ typedef struct {
 
 // Returns a frame returned from the robot.
 // DO NOT RELY ON THIS BEING A TRUE FRAME! Use frameIsInfo() to check.
-extern vision_frame_t getFrame(frc::SerialPort * serial);
+extern vision_frame_t getFrame(frc::SerialPort &serial);
 
 // Checks if the frame is an info frame.
 #define frameIsInfo(frame) (frame.header == VISION_INFO)
@@ -34,8 +34,8 @@ extern vision_info_t getInfo(vision_frame_t frame);
 
 // Increments the threshold and returns an info frame.
 // If no vision system is active, this will hang.
-extern vision_info_t incrementThreshold(frc::SerialPort * serial);
+extern vision_info_t incrementThreshold(frc::SerialPort &serial);
 
 // Decrements the threshold and returns an info frame.
 // If no vision system is active, this will hang.
-extern vision_info_t decrementThreshold(frc::SerialPort * serial);
+extern vision_info_t decrementThreshold(frc::SerialPort &serial);

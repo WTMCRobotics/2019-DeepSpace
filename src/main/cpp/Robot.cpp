@@ -64,7 +64,7 @@ private:
 
 	
 
-	//wether input comes from joystick or auton
+	//whether input comes from joystick or auton
 	bool isAuton = false;
 	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
 
@@ -83,17 +83,17 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
-	SerialPort serial_port = SerialPort(9600);
+	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
+
 	void RobotInit()
 	{
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-
-		ResetGyro();
+		serial_port.SetTimeout(.05);
 	}
 
 	/*
@@ -143,7 +143,7 @@ public:
 	void TeleopInit()
 	{
 		SetupMoters();
-		
+		ResetGyro();
 
 		cout << rightLeader.GetSelectedSensorPosition() << endl;
 		
@@ -151,8 +151,8 @@ public:
 	}
 
 	void ResetGyro() {
-		gyro.ZeroYaw();
-		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {}
+		pGyro->ZeroYaw();
+		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
 	}
 
 	void ResetEncoders() {
@@ -164,6 +164,7 @@ public:
 		//cout << DriveDistance(6 * 3.14) << endl;
 		//DriveDistance(1);
 		Drive();
+		UpdateRaspiInput();
 		//cout << gyro->GetAngle() << endl;
 		
 		//cout << rightLeader.GetSelectedSensorPosition() << endl;
@@ -176,8 +177,9 @@ public:
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			if (turnDegrees(90) {
-
+			
+			if (!turnDegrees(90)) {
+				pidAngle.Enable();
 			}
 
 			// if(DriveDistance(10)) {
@@ -238,6 +240,7 @@ public:
 
 
 	bool turnDegrees(double degrees) {
+		cout << pGyro->GetYaw() << endl;
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
@@ -318,10 +321,13 @@ public:
 
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput() {
-		frame = getFrame(&serial_port);
+		frame = getFrame(serial_port);
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
+			cout << "Threshold now " << vision_threshold << "\n";
+		} else {
+			cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
 		// TODO: Make the robot actually do stuff
 	}
@@ -329,7 +335,7 @@ public:
 
 	void UpdateControllerInputs() {
 		//Tank drive both stick
-		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
+		leftjoyY = -xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
 		
 		//Auton overide
