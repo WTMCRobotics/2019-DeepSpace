@@ -61,6 +61,7 @@ private:
 	bool rightShoulder;
 	bool leftShoulder;
 
+
 	
 
 	//wether input comes from joystick or auton
@@ -91,6 +92,8 @@ public:
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+
+		ResetGyro();
 	}
 
 	/*
@@ -147,14 +150,17 @@ public:
 		//cout << works << endl;
 	}
 
-	void ResetEncoders()
-	{
+	void ResetGyro() {
+		gyro.ZeroYaw();
+		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {}
+	}
+
+	void ResetEncoders() {
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 	}
 
-	void TeleopPeriodic()
-	{
+	void TeleopPeriodic() {
 		//cout << DriveDistance(6 * 3.14) << endl;
 		//DriveDistance(1);
 		Drive();
@@ -170,9 +176,13 @@ public:
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			if(DriveDistance(10)){
-				ResetEncoders();
+			if (turnDegrees(90) {
+
 			}
+
+			// if(DriveDistance(10)) {
+			// 	ResetEncoders();
+			// }
 		}
 		else {
 			leftTarget = leftjoyY;
@@ -227,33 +237,22 @@ public:
 	}
 
 
-	bool turnAngle(float angle, bool wideAngle) {
-		// positive angle is clockwise
-		// negative angle is counterclockwise
-		
-		if (!wideAngle) {
-			
-		
-		} else if(wideAngle) {
-			
-			if (angle > 0 ) {
-		
-		
+	bool turnDegrees(double degrees) {
 
-			} else if(angle <= 0) {
-
-		
-
-			}	
-
+		if(pidAngle.GetSetpoint() != degrees) {
+			pidAngle.SetSetpoint(degrees);
 		}
 
-
-		return false;
+		if(pidAngle.IsEnabled() && pidAngle.OnTarget())
+		{
+			pidAngle.Disable();
+			return true;
+		} else {
+			return false;
+		}
 	}
 
-	void SetupMoters()
-	{
+	void SetupMoters() {
 		//Right motor setup
 		leftLeader.ClearStickyFaults(0);
 		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
@@ -318,8 +317,7 @@ public:
 	}
 
 	//This Method will get inputs from raspi
-	void UpdateRaspiInput()
-	{
+	void UpdateRaspiInput() {
 		frame = getFrame(&serial_port);
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
@@ -329,8 +327,7 @@ public:
 	}
 
 
-	void UpdateControllerInputs()
-	{
+	void UpdateControllerInputs() {
 		//Tank drive both stick
 		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
