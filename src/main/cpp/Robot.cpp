@@ -347,6 +347,42 @@ public:
 		}
 #endif
 	}
+/*
+	void setArmAngle(float angle){
+
+	}
+
+	void setPistonExtended(int pistonID){
+
+	}
+
+	bool getPistonExtended(int pistonID){
+
+	}
+
+	void placeHatch(){
+
+	}
+
+	void placeCargo(){
+
+	}
+
+	void retrieveHatch(){
+
+	}
+
+	void ejectCargo(){
+
+	}*/
+	//stuff Elliot needs to do
+	//setArmAngle(float angle)
+	//setPistonExtended(int pistonID)
+	//getPistonExtended(int pistonID)
+	//placeHatch()
+	//placeCargo(float rocket or ship angle)
+	//retrieveHatch()
+	//ejectCargo()
 
 
 };
