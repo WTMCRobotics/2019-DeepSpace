@@ -39,6 +39,11 @@ private:
 	const string kAutoNameCustom = "My Auto";
 	string m_autoSelected;
 
+	//Robot properties
+	const float wheelCirc = 6 * 3.1415;
+	
+	
+
 	XboxController xboxController{0};
 	//Joystick joystick2, joystick2;
 	double leftjoyY;
@@ -124,12 +129,17 @@ public:
 	void TeleopInit()
 	{
 		SetupMoters();
-		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		
 
 		cout << rightLeader.GetSelectedSensorPosition() << endl;
 		
 		//cout << works << endl;
+	}
+
+	void resetMoters()
+	{
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 	}
 
 	void TeleopPeriodic()
@@ -146,23 +156,28 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		//UpdateRaspiInput();
+		isAuton = leftShoulder;
 
 		if(isAuton) {
-			driveDistance(10);
+			if(driveDistance(10)){
+				resetMoters();
+			}
 		}
 		else {
 			leftTarget = leftjoyY;
       		//cout << "leftTarget: " << leftTarget << endl;
 			rightTarget = rightjoyY;
       		//cout << "rightTarget: " << rightTarget << endl;
+
+			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
+			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
+
+			//Right motor move
+			
 		}
 
 
-		leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 		
-
-		//Right motor move
-		rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
 		//cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
 		//cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
@@ -184,13 +199,19 @@ public:
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
 		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+<<<<<<< HEAD
+		int targetEncPos = 8192 * inches;
+=======
+		
 		int targetEncPos = 8192 * 10;
+>>>>>>> 4ceb3d6894a4a5ac5f370ad082956848f9419846
+
 		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
 		}
-		cout << rightLeader.GetSelectedSensorPosition() << endl;
+		cout << rightLeader.GetSelectedSensorPosition() << "rightLeader.GetSelectedSensorPosition()" << endl;
 
 //					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
 //					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
@@ -289,6 +310,9 @@ public:
 		//Tank drive both stick
 		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+		
+		//Auton overide
+		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
 
 		
 
