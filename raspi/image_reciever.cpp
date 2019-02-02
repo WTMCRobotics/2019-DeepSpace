@@ -176,11 +176,12 @@ int main() {
             continue;
         }
         if (bytes32[0] == VISION_INFO) {
-            std::cout << "Threshold is now " << (int)bytes[4] << "\n";
+            std::cout << "Threshold is now " << ((float*)bytes)[1] << "\n";
         } else if (bytes32[0] == VISION_HEADER) {
             float angle = ((float*)bytes32)[1];
             float cmDistance = ((float*)bytes32)[2];
-            uint16_t dist = bytes16[6];
+            int16_t dist = bytes16[6];
+            if (angle == 0 && cmDistance == 0 && dist == 0) continue;
             std::cout << "Angle = " << angle << "\u00B0, line distance = " << cmDistance << " cm, wall distance = " << dist << "\n";
         } else {
             std::cerr << "Invalid header, discarding\n";

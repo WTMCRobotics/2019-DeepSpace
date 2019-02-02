@@ -1,5 +1,5 @@
 processing:
-	bash -c "g++ -g `pkg-config --cflags opencv` -o image_processing image_processing.cpp `pkg-config --libs opencv`"
+	bash -c "g++ -g `pkg-config --cflags opencv` -o image_processing image_processing.cpp getTime.cpp `pkg-config --libs opencv` -lwiringPi"
 
 benchmark:
 	bash -c "g++ -g `pkg-config --cflags opencv` -o image_processing_benchmark image_processing_benchmark.cpp `pkg-config --libs opencv`"

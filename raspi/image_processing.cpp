@@ -86,7 +86,6 @@ int serialOpen (const char *device, const int baud)
     case 3000000:	myBaud = B3000000 ; break ;
     case 3500000:	myBaud = B3500000 ; break ;
     case 4000000:	myBaud = B4000000 ; break ;
-
     default:
       return -2 ;
   }
@@ -236,9 +235,9 @@ int serialGetchar (const int fd)
 using namespace cv;
 using namespace std::chrono;
 
-#define JETSON // define if on jetson, undefine if on raspi
+//#define JETSON // define if on jetson, undefine if on raspi
 //#define CUDA // define to use GPU processing
-//#define SILENT // define to disable time checking
+#define SILENT // define to disable time checking
 //#define TFMINI // define if using TFmini LiDAR (not working)
 
 #ifdef CUDA
@@ -267,6 +266,12 @@ double brightness = 0.25;
 bool verbose = false;
 steady_clock::time_point t;
 std::vector<int> times;
+int serout;
+const char empty_frame[16] = {0x61, 0x01, 0xFE, 0xED, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xA0, 0x10};
+
+// Ultrasonic functions because I'm too lazy to rewrite it all from the console
+extern void initTime();
+extern double getTime();
 
 void outputImage(Mat cdst, bool success) {
     if (verbose) {
@@ -278,8 +283,12 @@ void outputImage(Mat cdst, bool success) {
     if (success) {
         std::cerr << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
         times.push_back((duration_cast<milliseconds>(steady_clock::now() - t)).count());
-    } else std::cerr << "Failed to get frame\n";
+    }
     #endif
+    if (!success) {
+        std::cerr << "Failed to get frame\n";
+        ::write(serout, empty_frame, 16);
+    }
 }
 
 void getResults(int signal) {
@@ -302,14 +311,15 @@ int main(int argc, const char * argv[]) {
     capture.set(CV_CAP_PROP_CONTRAST, 1.0);
     capture.set(CV_CAP_PROP_BRIGHTNESS, brightness);
     #ifdef JETSON
-    int serout = serialOpen("/dev/ttyTHS2", 9600);
+    serout = serialOpen("/dev/ttyTHS2", 9600);
     #else
-    int serout = serialOpen("/dev/ttyS0", 9600);
+    serout = serialOpen("/dev/ttyS0", 9600);
     #endif
     #ifdef TFMINI
     int serin = serialOpen("/dev/ttyUSB0", 115200);
     #endif
     if (argc > 1) verbose = true;
+    initTime();
     fcntl (serout, F_SETFL, O_NONBLOCK);
     {
         uint32_t frames[4];
@@ -381,8 +391,12 @@ int main(int argc, const char * argv[]) {
         #else
         threshold(bw, edges, (double)thresh, 255.0, THRESH_BINARY);
         #endif
-        if (verbose) edges.copyTo(cdst(Rect(0, 0, 640, 480)));
-        /*
+        if (verbose) {
+		Mat edgesrgb;
+		cvtColor(edges, edgesrgb, CV_GRAY2BGR);
+		edgesrgb.copyTo(cdst(Rect(0, 0, 640, 480)));
+        }
+	/*
         std::vector<bool> lastRow(640, 0);
         for (int x = 0; x < frame.rows; x++) {
             bool lastValue = false;
@@ -442,9 +456,11 @@ int main(int argc, const char * argv[]) {
         //std::cerr << cmDistance << "\n";
         if (verbose) cv::line(cdst, Point2f(320.0, center.y), Point2f(center.x, center.y), cv::Scalar(0, 255, 0));
 
-        // TODO: get distance data
+        // get distance data
         uint16_t * frames16 = (uint16_t*)frames;
-        frames16[6] = 0;
+        int16_t * frames16s = (int16_t*)frames;
+        frames16s[6] = (uint16_t)getTime();
+        if (frames16s[6] > 325) frames16s[6] = -1;
 
         // get checksum
         uint32_t sum = frames16[0] + frames16[1] + frames16[2] + 
