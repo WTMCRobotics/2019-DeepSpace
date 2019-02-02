@@ -54,11 +54,17 @@ private:
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
+
 	//triggers
 	double rightTrigger;
 	double leftTrigger;
 	bool rightShoulder;
 	bool leftShoulder;
+
+	//PID for turning
+	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
+	PIDGyroSource pidGyroSource { &gyro };
+	PIDController pidAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 	//wether input comes from joystick or auton
 	bool isAuton = false;
