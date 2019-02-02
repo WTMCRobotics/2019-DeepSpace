@@ -45,9 +45,6 @@ private:
 	const string kAutoNameCustom = "My Auto";
 	string m_autoSelected;
 
-	//Robot properties
-	const float wheelCirc = 6 * 3.1415;
-	
 	
 
 	XboxController xboxController{0};
@@ -57,7 +54,7 @@ private:
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
-	//trigers
+	//triggers
 	double rightTrigger;
 	double leftTrigger;
 	bool rightShoulder;
@@ -222,11 +219,30 @@ public:
 	}
 
 
-	bool turnDegrees(double degrees) {
+	bool turnAngle(float angle, bool wideAngle) {
+		// positive angle is clockwise
+		// negative angle is counterclockwise
+		
+		if (!wideAngle) {
+			
+		
+		} else if(wideAngle) {
+			
+			if (angle > 0 ) {
+		
+		
+
+			} else if(angel <= 0) {
 
 		
-	}
 
+			}	
+
+		}
+
+
+		return false;
+	}
 
 	void SetupMoters()
 	{
@@ -331,6 +347,42 @@ public:
 		}
 #endif
 	}
+/*
+	void setArmAngle(float angle){
+
+	}
+
+	void setPistonExtended(int pistonID){
+
+	}
+
+	bool getPistonExtended(int pistonID){
+
+	}
+
+	void placeHatch(){
+
+	}
+
+	void placeCargo(){
+
+	}
+
+	void retrieveHatch(){
+
+	}
+
+	void ejectCargo(){
+
+	}*/
+	//stuff Elliot needs to do
+	//setArmAngle(float angle)
+	//setPistonExtended(int pistonID)
+	//getPistonExtended(int pistonID)
+	//placeHatch()
+	//placeCargo(float rocket or ship angle)
+	//retrieveHatch()
+	//ejectCargo()
 
 
 };

@@ -17,7 +17,6 @@ public:
 	static const int LeftLeaderID = 21;
 	static const int LeftFollowerID = 22;
 
-
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;
 
