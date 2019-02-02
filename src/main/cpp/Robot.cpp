@@ -24,6 +24,12 @@
 #include <frc/Joystick.h>
 #include <frc/XboxController.h>
 
+#include "PIDMotorOutput.h"
+#include "PIDGyroSource.h"
+#include <frc/IDController.h>
+
+
+
 #include "Vision.h"
 
 using namespace frc;
@@ -136,7 +142,7 @@ public:
 		//cout << works << endl;
 	}
 
-	void resetMoters()
+	void ResetEncoders()
 	{
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
@@ -144,8 +150,8 @@ public:
 
 	void TeleopPeriodic()
 	{
-		//cout << driveDistance(6 * 3.14) << endl;
-		//driveDistance(1);
+		//cout << DriveDistance(6 * 3.14) << endl;
+		//DriveDistance(1);
 		Drive();
 		//cout << gyro->GetAngle() << endl;
 		
@@ -159,8 +165,8 @@ public:
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			if(driveDistance(10)){
-				resetMoters();
+			if(DriveDistance(10)){
+				ResetEncoders();
 			}
 		}
 		else {
@@ -194,39 +200,33 @@ public:
 	}
 
 
-	bool driveDistance(double inches) {
+	bool DriveDistance(double inches) {
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
 		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
-<<<<<<< HEAD
-		int targetEncPos = 8192 * inches;
-=======
 		
-		int targetEncPos = 8192 * 10;
->>>>>>> 4ceb3d6894a4a5ac5f370ad082956848f9419846
+		int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
 
 		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
 		}
-		cout << rightLeader.GetSelectedSensorPosition() << "rightLeader.GetSelectedSensorPosition()" << endl;
+		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
-//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
-//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
-		//cout << targetEncPos << endl;
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
-
-//					// Forward = positive encoder position for left
-//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
-//					// Forward = negative encoder position for right
-//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
-
 		return false;
 	}
+
+
+	bool turnDegrees(double degrees) {
+
+		
+	}
+
 
 	void SetupMoters()
 	{
