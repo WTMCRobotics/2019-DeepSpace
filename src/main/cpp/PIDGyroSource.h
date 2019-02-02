@@ -7,7 +7,7 @@
 
 #ifndef SRC_PIDGYROSOURCE_H_
 #define SRC_PIDGYROSOURCE_H_
-#include <frc/AHRS.h>
+#include "AHRS.h"
 
 #include <PIDSource.h>
 
