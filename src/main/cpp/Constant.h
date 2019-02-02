@@ -17,11 +17,12 @@ public:
 	static const int LeftLeaderID = 21;
 	static const int LeftFollowerID = 22;
 
+	static const int countsPerAngle = 0; //assign actuall value once tested
 
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;
 
-	static constexpr double pulsesPerRotationQuad = 2048 * 4;
+	static constexpr double pulsesPerRotationQuad = 8192;
 	static constexpr double circumference = 6 * 3.14;
 
 	static constexpr double tankDriveDeadbandVal = .15;
