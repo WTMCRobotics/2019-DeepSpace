@@ -22,7 +22,7 @@ public:
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;
 
-	static constexpr double pulsesPerRotationQuad = 2048 * 4;
+	static constexpr double pulsesPerRotationQuad = 8192;
 	static constexpr double circumference = 6 * 3.14;
 
 	static constexpr double tankDriveDeadbandVal = .15;
