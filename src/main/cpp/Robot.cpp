@@ -39,9 +39,6 @@ private:
 	const string kAutoNameCustom = "My Auto";
 	string m_autoSelected;
 
-	//Robot properties
-	const float wheelCirc = 6 * 3.1415;
-	
 	
 
 	XboxController xboxController{0};
@@ -51,7 +48,7 @@ private:
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
-	//trigers
+	//triggers
 	double rightTrigger;
 	double leftTrigger;
 	bool rightShoulder;
@@ -199,12 +196,8 @@ public:
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
 		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
-<<<<<<< HEAD
-		int targetEncPos = 8192 * inches;
-=======
 		
 		int targetEncPos = 8192 * 10;
->>>>>>> 4ceb3d6894a4a5ac5f370ad082956848f9419846
 
 		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
@@ -224,6 +217,35 @@ public:
 //					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
 //					// Forward = negative encoder position for right
 //					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+
+		return false;
+	}
+
+	bool turnAngle(float angle, bool wideAngle) {
+		// positive angle is clockwise
+		// negative angle is counterclockwise
+		if (!wideAngle) {
+			
+			int leftEncPos = 0.5 * angle * countsPerAngle;
+			int rightEncPos = 0.5 * -angle * countsPerAngle ;	
+
+		} else if(wideAngle) {
+			
+			if (angle > 0 ) {
+		
+			int leftEncPos = angle * countsPerAngle;
+
+			} else if(angel <= 0) {
+
+			int rightEncPos = angle * countsPerAngle;
+
+			}	
+
+		}
+
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, leftEncPos);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, rightEncPos);
+
 
 		return false;
 	}
