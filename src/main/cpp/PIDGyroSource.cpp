@@ -7,8 +7,8 @@
 
 #include <PIDGyroSource.h>
 
-PIDGyroSource::PIDGyroSource(AHRS* gyro) {
-	pGyro = gyro;
+PIDGyroSource::PIDGyroSource(AHRS* pGyroCon) {
+	pGyro = pGyroCon;
 }
 
 PIDGyroSource::~PIDGyroSource() {

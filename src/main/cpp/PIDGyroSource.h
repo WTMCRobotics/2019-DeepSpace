@@ -9,7 +9,7 @@
 #define SRC_PIDGYROSOURCE_H_
 #include "AHRS.h"
 
-#include <PIDSource.h>
+#include <frc/PIDSource.h>
 
 class PIDGyroSource: public frc::PIDSource {
 
@@ -19,9 +19,8 @@ private:
 
 public:
 
-	PIDGyroSource(AHRS* gyro);
+	PIDGyroSource(AHRS* pGyro);
 	virtual ~PIDGyroSource();
-
 	double PIDGet();
 	void SetPDISourceType( frc::PIDSourceType pidSource) {m_pidSourceType = pidSource; }
 	frc::PIDSourceType GetPIDSourceType() const {return m_pidSourceType;}

@@ -61,10 +61,7 @@ private:
 	bool rightShoulder;
 	bool leftShoulder;
 
-	//PID for turning
-	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
-	PIDGyroSource pidGyroSource { &gyro };
-	PIDController pidAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
+	
 
 	//wether input comes from joystick or auton
 	bool isAuton = false;
@@ -73,7 +70,7 @@ private:
 	//raspi input
 	vision_frame_t frame;
 
-	AHRS *gyro = new AHRS(SPI::Port::kMXP);
+	AHRS* pGyro = new AHRS(SPI::Port::kMXP);
 
 	TalonSRX leftLeader {Constant::LeftLeaderID};
 	TalonSRX leftFollower {Constant::LeftFollowerID};
@@ -81,6 +78,11 @@ private:
 	TalonSRX rightFollower {Constant::RightFollowerID};
 	
 	uint8_t vision_threshold;
+
+	//PID for turning
+	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
+	PIDGyroSource pidGyroSource { pGyro };
+	PIDController pidAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
 	SerialPort serial_port = SerialPort(9600);

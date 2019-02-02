@@ -8,9 +8,8 @@
 #ifndef SRC_PIDMOTOROUTPUT_H_
 #define SRC_PIDMOTOROUTPUT_H_
 
-#include <LiveWindow/LiveWindow.h>
 #include <ctre/Phoenix.h>
-#include <PIDOutput.h>
+#include <frc/PIDOutput.h>
 
 class PIDMotorOutput : public frc::PIDOutput
 {
