@@ -172,7 +172,6 @@ public:
 			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
 			
-			
 		}
 
 	}
