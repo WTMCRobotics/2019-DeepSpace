@@ -1,10 +1,3 @@
-/*----------------------------------------------------------------------------*/
-/* Copyright (c) 2017-2018 FIRST. All Rights Reserved.                        */
-/* Open Source Software - may be modified and shared by FRC teams. The code   */
-/* must be accompanied by the FIRST BSD license file in the root directory of */
-/* the project.                                                               */
-/*----------------------------------------------------------------------------*/
-
 #include <iostream>
 #include <string>
 
@@ -28,15 +21,12 @@
 #include "PIDGyroSource.h"
 #include <frc/PIDController.h>
 
-
-
 #include "Vision.h"
 
 using namespace frc;
 using namespace std;
 
-class Robot : public frc::TimedRobot
-{
+class Robot : public frc::TimedRobot {
 
 private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
@@ -60,9 +50,6 @@ private:
 	double leftTrigger;
 	bool rightShoulder;
 	bool leftShoulder;
-
-
-	
 
 	//whether input comes from joystick or auton
 	bool isAuton = false;
@@ -88,8 +75,7 @@ private:
 public:
 	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
 
-	void RobotInit()
-	{
+	void RobotInit() {
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
@@ -109,45 +95,32 @@ public:
 	 * SendableChooser make sure to add them to the chooser code above as
 	 * well.
 	 */
-	void AutonomousInit() override
-	{
+	void AutonomousInit() override {
 		m_autoSelected = m_chooser.GetSelected();
 
 		// m_autoSelected = SmartDashboard::GetString("Auto Selector",
 		//		 kAutoNameDefault);
 		cout << "Auto selected: " << m_autoSelected << endl;
 
-		if (m_autoSelected == kAutoNameCustom)
-		{
+		if (m_autoSelected == kAutoNameCustom) {
 			// Custom Auto goes here
-		}
-		else
-		{
+		} else {
 			// Default Auto goes here
 		}
 	}
 
-	void AutonomousPeriodic()
-	{
+	void AutonomousPeriodic() {
 		Drive();
-		if (m_autoSelected == kAutoNameCustom)
-		{
+		if (m_autoSelected == kAutoNameCustom) {
 			// Custom Auto goes here
-		}
-		else
-		{
+		} else {
 			// Default Auto goes here
 		}
 	}
 
-	void TeleopInit()
-	{
+	void TeleopInit() {
 		SetupMoters();
 		ResetGyro();
-
-		cout << rightLeader.GetSelectedSensorPosition() << endl;
-		
-		//cout << works << endl;
 	}
 
 	void ResetGyro() {
@@ -161,14 +134,8 @@ public:
 	}
 
 	void TeleopPeriodic() {
-		//cout << DriveDistance(6 * 3.14) << endl;
-		//DriveDistance(1);
 		Drive();
 		UpdateRaspiInput();
-		//cout << gyro->GetAngle() << endl;
-		
-		//cout << rightLeader.GetSelectedSensorPosition() << endl;
-		//cout << leftLeader.GetSelectedSensorPosition() << endl;
 	}
 
 	void Drive() {
@@ -178,34 +145,23 @@ public:
 
 		if(isAuton) {
 			
-			if (!turnDegrees(90)) {
+			if (!TurnDegrees(90)) {
 				pidAngle.Enable();
 			}
 
-			// if(DriveDistance(10)) {
-			// 	ResetEncoders();
-			// }
-		}
-		else {
+		} else {
+			//Set motor targets to the value of the joysticks
 			leftTarget = leftjoyY;
-      		//cout << "leftTarget: " << leftTarget << endl;
 			rightTarget = rightjoyY;
-      		//cout << "rightTarget: " << rightTarget << endl;
-
+			
+			//Set the motors to the motor targets
 			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
-			//Right motor move
+			
 			
 		}
 
-
-		
-
-		//cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
-		//cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
-		//cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
-		//cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
 	}
 
 	bool AutonPositionDeadband(double value, int target) {
@@ -239,15 +195,14 @@ public:
 	}
 
 
-	bool turnDegrees(double degrees) {
+	bool TurnDegrees(double degrees) {
 		cout << pGyro->GetYaw() << endl;
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
 		}
 
-		if(pidAngle.IsEnabled() && pidAngle.OnTarget())
-		{
+		if(pidAngle.IsEnabled() && pidAngle.OnTarget()) {
 			pidAngle.Disable();
 			return true;
 		} else {
@@ -303,7 +258,7 @@ public:
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
-		// PID Setup
+		// PID setup for driving a distance
 		leftLeader.Config_kP(Constant::pidChannel, .69, 0);
 		leftLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
 		leftLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
@@ -386,7 +341,7 @@ public:
 	void ejectCargo(){
 
 	}*/
-	//stuff Elliot needs to do
+	//stuff we need to do
 	//setArmAngle(float angle)
 	//setPistonExtended(int pistonID)
 	//getPistonExtended(int pistonID)
