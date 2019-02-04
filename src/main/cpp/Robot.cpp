@@ -22,6 +22,7 @@
 #include <frc/PIDController.h>
 
 #include <math.h>
+#define PI 3.14159265
 
 #include "Vision.h"
 
@@ -53,6 +54,14 @@ private:
 	bool rightShoulder;//not used yet
 	bool leftShoulder;
 
+	//Robot propeties
+	const float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_CAM = 1.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_HATCH_PANEL = 1.0f;  //TODO set this to correct value
+	const float HORIZONTAL_FOV = 60.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_CAM_ANGLE = 1.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_FINAL_ANGLE = 0.5f;  //TODO set this to correct value
+	const float ANGLE_MAX_ERROR = 5.0f;  //TODO set this to correct value
 	
 	//whether input comes from joystick or auton
 	bool isAuton = false;
@@ -142,6 +151,11 @@ public:
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 	}
 
+	void GetOffHab() {
+	DriveDistance(36,0.1);
+	ResetEncoders();
+	}
+
 	void TeleopPeriodic() {
 		Drive();
 		//cout << DriveDistance(6 * 3.14, 1) << endl;
@@ -159,8 +173,8 @@ public:
 
 		if(isAuton) {
 			
-			if (!DriveDistance(10, 0.3)) {
-				ResetEncoders();
+			if (!TurnDegrees(90)) {
+				pidAngle.Enable();
 			}
 		}
 		else {
@@ -189,22 +203,24 @@ public:
 
 		float x;
 		float y;
-		float targetAngle = (float)atan(y / x) * 180 / M_PI;
-		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR) {
-			outPut[1] = (float)atan(y / x) * 180 / M_PI; //TODO fix this its not exact
+		float targetAngle = (float)atan(y / x) * 180 / PI;
+		if(fabs(targetAngle - frame.angle) < ANGLE_MAX_ERROR) {
+			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
 			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
 			for(int i = 0; i < 100; i++){
 				autonInstructions[i] = outPut[i];
 			}
 			return true;
-		}else{
-			outPut[0] = Constant::DIST_TO_MANTAIN_FINAL_ANGLE;
+		}
+		else{
+			outPut[0] = DIST_TO_MANTAIN_FINAL_ANGLE;
 			float alinedAtX;
 			float alinedAtY;
-			if(fabs(targetAngle - frame.angle) < (Constant::HORIZONTAL_FOV / 2)){
-			}else{
-				outPut[2] = Constant::DIST_TO_MANTAIN_CAM_ANGLE;
-				outPut[1] = Constant::HORIZONTAL_FOV / 2;
+			if(fabs(targetAngle - frame.angle) < (HORIZONTAL_FOV / 2)){
+			}
+			else{
+				outPut[2] = DIST_TO_MANTAIN_CAM_ANGLE;
+				outPut[1] = HORIZONTAL_FOV / 2;
 			}
 		}
 		return false;
@@ -236,8 +252,8 @@ public:
 		}
 		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
-		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
-		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
+		leftLeader.ConfigMotionCruiseVelocity(speed);
+		rightLeader.ConfigMotionCruiseVelocity(speed);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
