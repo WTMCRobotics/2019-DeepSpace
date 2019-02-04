@@ -28,7 +28,8 @@
 #include "PIDGyroSource.h"
 #include <frc/PIDController.h>
 
-
+#include <math.h>
+#define PI 3.14159265
 
 #include "Vision.h"
 
@@ -56,18 +57,24 @@ private:
 	double rightTarget;
 
 	//triggers
-	double rightTrigger;
-	double leftTrigger;
-	bool rightShoulder;
+	double rightTrigger;//not used yet
+	double leftTrigger;//not used yet
+	bool rightShoulder;//not used yet
 	bool leftShoulder;
 
-
+	//Robot propeties
+	const float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_CAM = 1.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_HATCH_PANEL = 1.0f;  //TODO set this to correct value
+	const float HORIZONTAL_FOV = 60.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_CAM_ANGLE = 1.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_FINAL_ANGLE = 0.5f;  //TODO set this to correct value
+	const float ANGLE_MAX_ERROR = 5.0f;  //TODO set this to correct value
 	
 
 	//whether input comes from joystick or auton
 	bool isAuton = false;
-	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
-
+	
 	//raspi input
 	vision_frame_t frame;
 
@@ -84,8 +91,12 @@ private:
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
 	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+	const float MOTION_CRUISE_VELOCITY = 1; //TODO set this to correct value
 
 public:
+	float autonInstructions [100] = {};  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+
+
 	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
 
 	void RobotInit()
@@ -144,6 +155,7 @@ public:
 	{
 		SetupMoters();
 		ResetGyro();
+		ResetEncoders();
 
 		cout << rightLeader.GetSelectedSensorPosition() << endl;
 		
@@ -161,10 +173,9 @@ public:
 	}
 
 	void TeleopPeriodic() {
-		//cout << DriveDistance(6 * 3.14) << endl;
-		//DriveDistance(1);
+		//cout << DriveDistance(6 * 3.14, 1) << endl;
+		//DriveDistance(1, 1);
 		Drive();
-		UpdateRaspiInput();
 		//cout << gyro->GetAngle() << endl;
 		
 		//cout << rightLeader.GetSelectedSensorPosition() << endl;
@@ -173,7 +184,7 @@ public:
 
 	void Drive() {
 		UpdateControllerInputs();
-		//UpdateRaspiInput();
+		UpdateRaspiInput();
 		isAuton = leftShoulder;
 
 		if(isAuton) {
@@ -182,7 +193,7 @@ public:
 				pidAngle.Enable();
 			}
 
-			// if(DriveDistance(10)) {
+			// if(DriveDistance(10, 1)) {
 			// 	ResetEncoders();
 			// }
 		}
@@ -208,6 +219,41 @@ public:
 		//cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
 	}
 
+	bool ApproachLine(float targetDistance) {
+		//returns true when done
+		CalculateAutonInstructions();
+	}
+
+	bool CalculateAutonInstructions() {
+		//returns true if AutonInstructions have bean generated successfully
+
+		float outPut [100] = {}; //autonInstructions will be set to this if successful
+
+		float x;
+		float y;
+		float targetAngle = (float)atan(y / x) * 180 / PI;
+		if(fabs(targetAngle - frame.angle) < ANGLE_MAX_ERROR) {
+			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
+			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
+			for(int i = 0; i < 100; i++){
+				autonInstructions[i] = outPut[i];
+			}
+			return true;
+		}
+		else{
+			outPut[0] = DIST_TO_MANTAIN_FINAL_ANGLE;
+			float alinedAtX;
+			float alinedAtY;
+			if(fabs(targetAngle - frame.angle) < (HORIZONTAL_FOV / 2)){
+			}
+			else{
+				outPut[2] = DIST_TO_MANTAIN_CAM_ANGLE;
+				outPut[1] = HORIZONTAL_FOV / 2;
+			}
+		}
+		return false;
+	}
+
 	bool AutonPositionDeadband(double value, int target) {
 		if (fabs(target - value) < Constant::autonPositionDeadbandVal) {
 			return true; 
@@ -217,7 +263,9 @@ public:
 	}
 
 
-	bool DriveDistance(double inches) {
+	bool DriveDistance(double inches, float speed) {
+		//speed is a presentage from 0.0 to 1.0
+
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
@@ -232,6 +280,8 @@ public:
 		}
 		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
+		leftLeader.ConfigMotionCruiseVelocity(speed);
+		rightLeader.ConfigMotionCruiseVelocity(speed);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
