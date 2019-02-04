@@ -4,13 +4,21 @@
 #include <cstdint>
 #include <frc/SerialPort.h>
 
+enum vision_error {
+    VISION_ERROR_SUCCESS = 0,
+    VISION_ERROR_NO_DATA = 1,
+    VISION_ERROR_BAD_RECT = 2,
+    VISION_ERROR_BAD_DISTANCE = 4
+};
+
 // Vision frame struct
 typedef struct {
     uint32_t header;
     float angle;
     float line_offset;
-    uint16_t reserved_distance;
+    int16_t wall_distance;
     uint16_t checksum;
+    uint8_t error;
 } vision_frame_t;
 
 // Vision info struct
@@ -19,6 +27,7 @@ typedef struct {
     float threshold;
     char zero[6];
     uint16_t checksum;
+    uint8_t error;
 } vision_info_t;
 
 // Returns a frame returned from the robot.

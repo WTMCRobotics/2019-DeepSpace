@@ -7,7 +7,7 @@
 
 #include <iostream>
 #include <string>
-
+#include <chrono>
 
 #include <frc/WPILib.h>
 
@@ -79,6 +79,8 @@ private:
 	TalonSRX rightFollower {Constant::RightFollowerID};
 	
 	uint8_t vision_threshold;
+	chrono::steady_clock time_clock;
+	chrono::steady_clock::time_point last_frame_time;
 
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
@@ -319,13 +321,42 @@ public:
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput() {
 		frame = getFrame(&serial_port);
+		if (frame.error) {
+			return;
+		}
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
 		}
-		// TODO: Make the robot actually do stuff
+		last_frame_time = time_clock.now();
 	}
 
+	bool IsLineApproachable() {
+		if (chrono::duration_cast<chrono::milliseconds>(time_clock.now() - last_frame_time).count() > 35) // old frame is outdated
+			UpdateRaspiInput();
+		return (abs(frame.angle) < 1 && abs(frame.line_offset) < 2.5 &&      // thresholds
+		        frame.angle != 0 && frame.line_offset != 0 && !frame.error); // check for problems
+	}
+
+	bool DockRobot() {
+		if (IsLineApproachable()) {
+			while (frame.wall_distance > 3) {
+				MoveDistance(frame.wall_distance / 4);
+				UpdateRaspiInput();
+			}
+			return true;
+		} else if (abs(frame.line_offset) >= 2.5) {
+			RotateAngle((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1));
+			MoveDistance(frame.line_offset);
+			RotateAngle(90 * (frame.line_offset < 0 ? 1 : -1));
+			return DockRobot();
+		} else if (frame.error) {
+			return false;
+		} else {
+			RotateAngle(-frame.angle);
+			return DockRobot();
+		}
+	}
 
 	void UpdateControllerInputs() {
 		//Tank drive both stick
@@ -352,34 +383,44 @@ public:
 		}
 #endif
 	}
-/*
-	void setArmAngle(float angle){
+
+	void SetArmAngle(float angle){
 
 	}
 
-	void setPistonExtended(int pistonID){
+	void SetPistonExtended(int pistonID){
 
 	}
 
-	bool getPistonExtended(int pistonID){
+	bool SetPistonExtended(int pistonID){
+		return false;
+	}
+
+	void PlaceHatch(){
 
 	}
 
-	void placeHatch(){
+	void PlaceCargo(){
 
 	}
 
-	void placeCargo(){
+	void RetrieveHatch(){
 
 	}
 
-	void retrieveHatch(){
+	void EjectCargo(){
 
 	}
 
-	void ejectCargo(){
+	// Dummy to suppress errors
+	void MoveDistance(float cm) {
 
-	}*/
+	}
+
+	void RotateAngle(float deg) {
+
+	}
+
 	//stuff Elliot needs to do
 	//setArmAngle(float angle)
 	//setPistonExtended(int pistonID)
