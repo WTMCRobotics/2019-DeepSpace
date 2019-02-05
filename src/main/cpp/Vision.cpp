@@ -17,6 +17,7 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
             #ifdef VISION_DEBUG
             std::cout << "Bad byte " << (int)byte1 << "\n";
             #endif
+            if (byte1 == 0) return frame;
             continue;
         }
         serial.Read(&byte2, 1);

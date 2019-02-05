@@ -174,7 +174,7 @@ public:
 		if(isAuton) {
 			
 			if (DriveDistance(10,0.5)) {
-				pidAngle.Enable();
+				ResetEncoders();
 			}
 		}
 		else {
