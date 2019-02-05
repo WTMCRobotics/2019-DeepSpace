@@ -17,7 +17,10 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
             #ifdef VISION_DEBUG
             std::cout << "Bad byte " << (int)byte1 << "\n";
             #endif
-            if (byte1 == 0) return frame;
+            if (byte1 == 0) {
+                frame.error = VISION_ERROR_NO_DATA;
+                return frame;
+            }
             continue;
         }
         serial.Read(&byte2, 1);
@@ -25,6 +28,10 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
             #ifdef VISION_DEBUG
             std::cout << "Bad byte 2 " << (int)byte2 << "\n";
             #endif
+            if (byte2 == 0) {
+                frame.error = VISION_ERROR_NO_DATA;
+                return frame;
+            }
             continue;
         }
         // It aligns, read the rest
@@ -32,6 +39,8 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
         ((char*)&frame)[1] = byte2;
         for (int i = 2; i < 16; i++)
             serial.Read(&((char*)&frame)[i], 1);    
+        if (frame.angle == 0 || frame.line_offset == 0) frame.error |= VISION_ERROR_BAD_RECT;
+        if (frame.wall_distance == -1 || frame.wall_distance == 0) frame.error |= VISION_ERROR_BAD_DISTANCE;
         return frame;
     }
 }
