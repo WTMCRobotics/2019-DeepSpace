@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <csignal>
 #include <fcntl.h>
+#include <cmath>
 // #include <wiringSerial.h>
 #pragma region 
 /*
@@ -31,12 +32,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
+//#include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
-#include <fcntl.h>
+//#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -338,6 +339,7 @@ int main(int argc, const char * argv[]) {
     while (true) {
         t = steady_clock::now();
         uint32_t frames[4];
+        bool success = false;
         frames[0] = VISION_HEADER;
         Mat frame, cdst(Size(640, 480*2), CV_8UC3), edges;
         #ifdef CUDA
@@ -348,8 +350,9 @@ int main(int argc, const char * argv[]) {
         capture >> frame;
         if(frame.empty()) {
             std::cerr << "Failed to capture an image.\n";
-            return 2;
+            goto ErrorLine;
         }
+        {
         char c = 0;
         if (serialDataAvail(serout)) {
             c = serialGetchar(serout);
@@ -392,9 +395,9 @@ int main(int argc, const char * argv[]) {
         threshold(bw, edges, (double)thresh, 255.0, THRESH_BINARY);
         #endif
         if (verbose) {
-		Mat edgesrgb;
-		cvtColor(edges, edgesrgb, CV_GRAY2BGR);
-		edgesrgb.copyTo(cdst(Rect(0, 0, 640, 480)));
+            Mat edgesrgb;
+            cvtColor(edges, edgesrgb, CV_GRAY2BGR);
+            edgesrgb.copyTo(cdst(Rect(0, 0, 640, 480)));
         }
 	/*
         std::vector<bool> lastRow(640, 0);
@@ -414,7 +417,8 @@ int main(int argc, const char * argv[]) {
         // extract contours
         std::vector<std::vector<cv::Point> > contours;
         cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-        if (contours.size() < 1) {outputImage(cdst, false); continue;}
+        if (contours.size() < 1) goto ErrorLine;
+        {
         // fit bounding rectangle around contour
         cv::RotatedRect rotatedRect = cv::minAreaRect(contours[0]);
 
@@ -434,7 +438,7 @@ int main(int argc, const char * argv[]) {
         cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
 
         angle = (180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)))) - 90.0;
-        if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) {outputImage(cdst, false); continue;}
+        if (angle == 90.0 || angle == 0.0-90.0 || angle == 0.0 || angle == 45.0 || angle == 0.0-45.0) goto ErrorLine;
         // read center of rotated rect
         cv::Point2f center = rotatedRect.center; // center
 
@@ -443,7 +447,8 @@ int main(int argc, const char * argv[]) {
             for(unsigned int j=0; j<4; ++j)
                 cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
 
-        if (isnan(angle)) {outputImage(cdst, false); continue;}
+        if (isnan(angle)) goto ErrorLine;
+        {
         frames[1] = *(uint32_t*)(&angle);
         
         // Calculate offset
@@ -455,7 +460,9 @@ int main(int argc, const char * argv[]) {
         frames[2] = *(uint32_t*)(&cmDistance);
         //std::cerr << cmDistance << "\n";
         if (verbose) cv::line(cdst, Point2f(320.0, center.y), Point2f(center.x, center.y), cv::Scalar(0, 255, 0));
-
+        success = true;
+        }}}
+ErrorLine:
         // get distance data
         uint16_t * frames16 = (uint16_t*)frames;
         int16_t * frames16s = (int16_t*)frames;
@@ -471,7 +478,7 @@ int main(int argc, const char * argv[]) {
         ::write(serout, frames, 16);
 
         // output final image
-        outputImage(cdst, true);
+        outputImage(cdst, success);
     }
     return 0;
 }

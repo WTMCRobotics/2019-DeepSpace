@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-
+#include <chrono>
 
 #include <frc/WPILib.h>
 
@@ -77,6 +77,8 @@ private:
 	TalonSRX rightFollower {Constant::RightFollowerID};
 	
 	uint8_t vision_threshold;
+	chrono::steady_clock time_clock;
+	chrono::steady_clock::time_point last_frame_time;
 
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
@@ -349,6 +351,9 @@ public:
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput() {
 		frame = getFrame(serial_port);
+		if (frame.error) {
+			return;
+		}
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
@@ -356,9 +361,54 @@ public:
 		} else {
 			cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
-		// TODO: Make the robot actually do stuff
+		last_frame_time = time_clock.now();
 	}
 
+	bool IsLineApproachable() {
+		if (chrono::duration_cast<chrono::milliseconds>(time_clock.now() - last_frame_time).count() > 35) // old frame is outdated
+			UpdateRaspiInput();
+		return (abs(frame.angle) < 1 && abs(frame.line_offset) < 2.5 &&      // thresholds
+		        frame.angle != 0 && frame.line_offset != 0 && !frame.error); // check for problems
+	}
+
+	uint8_t dock_state = 0;
+	int DockRobot() {
+		if (IsLineApproachable()) {
+			if (frame.wall_distance > 3) {
+				if (DriveDistance(frame.wall_distance / (4 * 2.54), 0.5)) ResetEncoders();
+				else return 0;
+			}
+			return 1;
+		} else if (abs(frame.line_offset) >= 2.5 || (dock_state > 0 && dock_state < 3)) {
+			if (dock_state == 0) {
+				if (RotateAngle((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1), false)) {
+					ResetEncoders();
+					dock_state = 1;
+				}
+				return 0;
+			} else if (dock_state == 1) {
+				if (DriveDistance(frame.line_offset / 2.54, 0.5)) {
+					ResetEncoders();
+					dock_state = 2;
+				}
+				return 0;
+			} else if (dock_state == 2) {
+				if (RotateAngle(90 * (frame.line_offset < 0 ? 1 : -1), false)) {
+					ResetEncoders();
+					dock_state = 0;
+				}
+				return 0;
+			}
+		} else if (frame.error) {
+			return -1;
+		} else {
+			if (RotateAngle(-frame.angle, false)) {
+				ResetEncoders();
+				dock_state = 0;
+			}
+			return 0;
+		}
+	}
 
 	void UpdateControllerInputs() {
 		//Tank drive both stick
@@ -385,34 +435,35 @@ public:
 		}
 #endif
 	}
-/*
-	void setArmAngle(float angle){
+
+	void SetArmAngle(float angle){
 
 	}
 
-	void setPistonExtended(int pistonID){
+	void SetPistonExtended(int pistonID){
 
 	}
 
-	bool getPistonExtended(int pistonID){
+	bool SetPistonExtended(int pistonID){
+		return false;
+	}
+
+	void PlaceHatch(){
 
 	}
 
-	void placeHatch(){
+	void PlaceCargo(){
 
 	}
 
-	void placeCargo(){
+	void RetrieveHatch(){
 
 	}
 
-	void retrieveHatch(){
+	void EjectCargo(){
 
 	}
 
-	void ejectCargo(){
-
-	}*/
 	//stuff we need to do
 	//setArmAngle(float angle)
 	//setPistonExtended(int pistonID)
