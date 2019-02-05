@@ -338,23 +338,42 @@ public:
 		        frame.angle != 0 && frame.line_offset != 0 && !frame.error); // check for problems
 	}
 
-	bool DockRobot() {
+	uint8_t dock_state = 0;
+	int DockRobot() {
 		if (IsLineApproachable()) {
-			while (frame.wall_distance > 3) {
-				MoveDistance(frame.wall_distance / 4);
-				UpdateRaspiInput();
+			if (frame.wall_distance > 3) {
+				if (DriveDistance(frame.wall_distance / (4 * 2.54), 0.5)) ResetEncoders();
+				else return 0;
 			}
-			return true;
-		} else if (abs(frame.line_offset) >= 2.5) {
-			RotateAngle((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1));
-			MoveDistance(frame.line_offset);
-			RotateAngle(90 * (frame.line_offset < 0 ? 1 : -1));
-			return DockRobot();
+			return 1;
+		} else if (abs(frame.line_offset) >= 2.5 || (dock_state > 0 && dock_state < 3)) {
+			if (dock_state == 0) {
+				if (RotateAngle((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1), false)) {
+					ResetEncoders();
+					dock_state = 1;
+				}
+				return 0;
+			} else if (dock_state == 1) {
+				if (DriveDistance(frame.line_offset / 2.54, 0.5)) {
+					ResetEncoders();
+					dock_state = 2;
+				}
+				return 0;
+			} else if (dock_state == 2) {
+				if (RotateAngle(90 * (frame.line_offset < 0 ? 1 : -1), false)) {
+					ResetEncoders();
+					dock_state = 0;
+				}
+				return 0;
+			}
 		} else if (frame.error) {
-			return false;
+			return -1;
 		} else {
-			RotateAngle(-frame.angle);
-			return DockRobot();
+			if (RotateAngle(-frame.angle, false)) {
+				ResetEncoders();
+				dock_state = 0;
+			}
+			return 0;
 		}
 	}
 
@@ -409,15 +428,6 @@ public:
 	}
 
 	void EjectCargo(){
-
-	}
-
-	// Dummy to suppress errors
-	void MoveDistance(float cm) {
-
-	}
-
-	void RotateAngle(float deg) {
 
 	}
 
