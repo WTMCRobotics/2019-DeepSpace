@@ -151,10 +151,13 @@ public:
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 	}
 
-	void GetOffHab() {
-	DriveDistance(36,0.1);
-	ResetEncoders();
+	bool GetOffHab() {
+		if(DriveDistance(36,0.1)) {
+			ResetEncoders();
+			return true;
+		}
 	}
+
 
 	void TeleopPeriodic() {
 		Drive();
