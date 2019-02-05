@@ -173,7 +173,7 @@ public:
 
 		if(isAuton) {
 			
-			if (!TurnDegrees(90)) {
+			if (DriveDistance(10,0.5)) {
 				pidAngle.Enable();
 			}
 		}
