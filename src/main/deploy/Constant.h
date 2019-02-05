@@ -36,6 +36,15 @@ public:
 
 	static constexpr double rightMotionVel = 0;
 	static constexpr double rightMotionAcc = 0;
+
+	//Robot propeties
+	static const float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0f;  //TODO set this to correct value
+	static const float DIST_CENTER_AXEL_TO_CAM = 1.0f;  //TODO set this to correct value
+	static const float DIST_CENTER_AXEL_TO_HATCH_PANEL = 1.0f;  //TODO set this to correct value
+	static const float HORIZONTAL_FOV = 60.0f;  //TODO set this to correct value
+	static const float DIST_TO_MANTAIN_CAM_ANGLE = 1.0f;  //TODO set this to correct value
+	static const float DIST_TO_MANTAIN_FINAL_ANGLE = 0.5f;  //TODO set this to correct value
+	static const float ANGLE_MAX_ERROR = 5.0f;  //TODO set this to correct value
 };
 
 

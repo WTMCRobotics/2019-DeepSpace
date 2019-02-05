@@ -1,10 +1,3 @@
-/*----------------------------------------------------------------------------*/
-/* Copyright (c) 2017-2018 FIRST. All Rights Reserved.                        */
-/* Open Source Software - may be modified and shared by FRC teams. The code   */
-/* must be accompanied by the FIRST BSD license file in the root directory of */
-/* the project.                                                               */
-/*----------------------------------------------------------------------------*/
-
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -28,15 +21,15 @@
 #include "PIDGyroSource.h"
 #include <frc/PIDController.h>
 
-
+#include <math.h>
+#define PI 3.14159265
 
 #include "Vision.h"
 
 using namespace frc;
 using namespace std;
 
-class Robot : public frc::TimedRobot
-{
+class Robot : public frc::TimedRobot {
 
 private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
@@ -56,18 +49,23 @@ private:
 	double rightTarget;
 
 	//triggers
-	double rightTrigger;
-	double leftTrigger;
-	bool rightShoulder;
+	double rightTrigger;//not used yet
+	double leftTrigger;//not used yet
+	bool rightShoulder;//not used yet
 	bool leftShoulder;
 
-
+	//Robot propeties
+	const float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_CAM = 1.0f;  //TODO set this to correct value
+	const float DIST_CENTER_AXEL_TO_HATCH_PANEL = 1.0f;  //TODO set this to correct value
+	const float HORIZONTAL_FOV = 60.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_CAM_ANGLE = 1.0f;  //TODO set this to correct value
+	const float DIST_TO_MANTAIN_FINAL_ANGLE = 0.5f;  //TODO set this to correct value
+	const float ANGLE_MAX_ERROR = 5.0f;  //TODO set this to correct value
 	
-
-	//wether input comes from joystick or auton
+	//whether input comes from joystick or auton
 	bool isAuton = false;
-	float autonInstructions [100] = {0};  //Odd positions like autonInstructions[1] are distance and Even ones are angles they are exicuted in order from greates to least
-
+	
 	//raspi input
 	vision_frame_t frame;
 
@@ -85,17 +83,19 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
-	SerialPort serial_port = SerialPort(9600);
-	void RobotInit()
-	{
+	float autonInstructions [100] = {};  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+
+
+	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
+
+	void RobotInit() {
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-
-		ResetGyro();
+		serial_port.SetTimeout(.05);
 	}
 
 	/*
@@ -111,50 +111,41 @@ public:
 	 * SendableChooser make sure to add them to the chooser code above as
 	 * well.
 	 */
-	void AutonomousInit() override
-	{
+	void AutonomousInit() override {
 		m_autoSelected = m_chooser.GetSelected();
 
 		// m_autoSelected = SmartDashboard::GetString("Auto Selector",
 		//		 kAutoNameDefault);
 		cout << "Auto selected: " << m_autoSelected << endl;
 
-		if (m_autoSelected == kAutoNameCustom)
-		{
+		if (m_autoSelected == kAutoNameCustom) {
 			// Custom Auto goes here
-		}
-		else
-		{
+		} else {
 			// Default Auto goes here
 		}
 	}
 
-	void AutonomousPeriodic()
-	{
+	void AutonomousPeriodic() {
 		Drive();
-		if (m_autoSelected == kAutoNameCustom)
-		{
+		if (m_autoSelected == kAutoNameCustom) {
 			// Custom Auto goes here
-		}
-		else
-		{
+		} else {
 			// Default Auto goes here
 		}
 	}
 
-	void TeleopInit()
-	{
+	void TeleopInit() {
 		SetupMoters();
-		
+		ResetGyro();
+		ResetEncoders();
 
-		cout << rightLeader.GetSelectedSensorPosition() << endl;
-		
+		cout << rightLeader.GetSelectedSensorPosition() << endl;	
 		//cout << works << endl;
 	}
 
 	void ResetGyro() {
-		gyro.ZeroYaw();
-		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {}
+		pGyro->ZeroYaw();
+		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
 	}
 
 	void ResetEncoders() {
@@ -162,10 +153,18 @@ public:
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 	}
 
+	bool GetOffHab() {
+		if(DriveDistance(36,0.1)) {
+			ResetEncoders();
+			return true;
+		}
+	}
+
+
 	void TeleopPeriodic() {
-		//cout << DriveDistance(6 * 3.14) << endl;
-		//DriveDistance(1);
 		Drive();
+		//cout << DriveDistance(6 * 3.14, 1) << endl;
+		//DriveDistance(1, 1);
 		//cout << gyro->GetAngle() << endl;
 		
 		//cout << rightLeader.GetSelectedSensorPosition() << endl;
@@ -174,38 +173,61 @@ public:
 
 	void Drive() {
 		UpdateControllerInputs();
-		//UpdateRaspiInput();
+		UpdateRaspiInput();
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			if (turnDegrees(90) {
-
+			
+			if (DriveDistance(24, 1)) {
+				ResetEncoders();
 			}
-
-			// if(DriveDistance(10)) {
-			// 	ResetEncoders();
-			// }
 		}
 		else {
 			leftTarget = leftjoyY;
-      		//cout << "leftTarget: " << leftTarget << endl;
 			rightTarget = rightjoyY;
-      		//cout << "rightTarget: " << rightTarget << endl;
-
+			
+			//Set the motors to the motor targets
 			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
-			//Right motor move
 			
 		}
 
+	}
 
-		
+	bool ApproachLine(float targetDistance) {
+		//returns true when done
+		CalculateAutonInstructions();
+	}
 
-		//cout << "LeftMotionVel: " << (Constant::leftMotionVel == 0 ? "true" : "false") << "\n";
-		//cout << "LeftMotionAcc: " << (Constant::leftMotionAcc == 0 ? "true" : "false") << "\n";
-		//cout << "RightMotionVel: " << (Constant::rightMotionVel == 0 ? "true" : "false") << "\n";
-		//cout << "RightMotionAcc: " << (Constant::rightMotionAcc == 0 ? "true" : "false") << "\n";
+	bool CalculateAutonInstructions() {
+		//returns true if AutonInstructions have bean generated successfully
+
+		float outPut [100] = {}; //autonInstructions will be set to this if successful
+
+		float x;
+		float y;
+		float targetAngle = (float)atan(y / x) * 180 / PI;
+		if(fabs(targetAngle - frame.angle) < ANGLE_MAX_ERROR) {
+			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
+			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
+			for(int i = 0; i < 100; i++){
+				autonInstructions[i] = outPut[i];
+			}
+			return true;
+		}
+		else{
+			outPut[0] = DIST_TO_MANTAIN_FINAL_ANGLE;
+			float alinedAtX;
+			float alinedAtY;
+			if(fabs(targetAngle - frame.angle) < (HORIZONTAL_FOV / 2)){
+			}
+			else{
+				outPut[2] = DIST_TO_MANTAIN_CAM_ANGLE;
+				outPut[1] = HORIZONTAL_FOV / 2;
+			}
+		}
+		return false;
 	}
 
 	bool AutonPositionDeadband(double value, int target) {
@@ -217,7 +239,9 @@ public:
 	}
 
 
-	bool DriveDistance(double inches) {
+	bool DriveDistance(double inches, float speed) {
+		//speed is a presentage from 0.0 to 1.0
+
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
@@ -232,6 +256,12 @@ public:
 		}
 		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
+		if(speed > 1)
+		speed = 1;
+		if(speed < 0)
+		speed =0;
+		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
+		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
@@ -239,14 +269,14 @@ public:
 	}
 
 
-	bool turnDegrees(double degrees) {
+	bool TurnDegrees(double degrees) {
+		cout << pGyro->GetYaw() << endl;
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
 		}
 
-		if(pidAngle.IsEnabled() && pidAngle.OnTarget())
-		{
+		if(pidAngle.IsEnabled() && pidAngle.OnTarget()) {
 			pidAngle.Disable();
 			return true;
 		} else {
@@ -302,7 +332,7 @@ public:
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
-		// PID Setup
+		// PID setup for driving a distance
 		leftLeader.Config_kP(Constant::pidChannel, .69, 0);
 		leftLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
 		leftLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
@@ -320,13 +350,16 @@ public:
 
 	//This Method will get inputs from raspi
 	void UpdateRaspiInput() {
-		frame = getFrame(&serial_port);
+		frame = getFrame(serial_port);
 		if (frame.error) {
 			return;
 		}
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
+			cout << "Threshold now " << vision_threshold << "\n";
+		} else {
+			cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
 		last_frame_time = time_clock.now();
 	}
@@ -379,7 +412,7 @@ public:
 
 	void UpdateControllerInputs() {
 		//Tank drive both stick
-		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
+		leftjoyY = -xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
 		
 		//Auton overide
@@ -431,7 +464,7 @@ public:
 
 	}
 
-	//stuff Elliot needs to do
+	//stuff we need to do
 	//setArmAngle(float angle)
 	//setPistonExtended(int pistonID)
 	//getPistonExtended(int pistonID)
