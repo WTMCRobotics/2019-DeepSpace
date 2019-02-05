@@ -1,6 +1,6 @@
 #include "Vision.h"
 #include <iostream>
-#define VISION_DEBUG
+//#define VISION_DEBUG
 
 vision_frame_t getFrame(frc::SerialPort &serial) {
     vision_frame_t frame;

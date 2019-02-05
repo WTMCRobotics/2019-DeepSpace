@@ -147,13 +147,15 @@ public:
 	}
 
 	void ResetEncoders() {
-		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);
+		cout << "reseting encoders\n"; 
 	}
 
 	bool GetOffHab() {
-		if(DriveDistance(36,0.1)) {
+		if(DriveDistance(36,0.05)) {
 			ResetEncoders();
+			cout << "returning true\n"; 
 			return true;
 		}
 	}
@@ -175,10 +177,7 @@ public:
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			
-			if (DriveDistance(24, 1)) {
-				ResetEncoders();
-			}
+			GetOffHab();
 		}
 		else {
 			leftTarget = leftjoyY;
@@ -252,7 +251,7 @@ public:
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
 		}
-		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
+		//cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
 		if(speed > 1)
 		speed = 1;
@@ -352,9 +351,9 @@ public:
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
-			cout << "Threshold now " << vision_threshold << "\n";
+			//cout << "Threshold now " << vision_threshold << "\n";
 		} else {
-			cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
+			//cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
 		// TODO: Make the robot actually do stuff
 	}
