@@ -173,7 +173,7 @@ public:
 
 		if(isAuton) {
 			
-			if (DriveDistance(10,0.5)) {
+			if (DriveDistance(24, 1)) {
 				ResetEncoders();
 			}
 		}
@@ -251,8 +251,12 @@ public:
 		}
 		cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
-		leftLeader.ConfigMotionCruiseVelocity(speed);
-		rightLeader.ConfigMotionCruiseVelocity(speed);
+		if(speed > 1)
+		speed = 1;
+		if(speed < 0)
+		speed =0;
+		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
+		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
