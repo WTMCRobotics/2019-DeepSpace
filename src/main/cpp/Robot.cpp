@@ -65,6 +65,7 @@ private:
 	
 	//whether input comes from joystick or auton
 	bool isAuton = false;
+	bool isOffHab = false;
 	
 	//raspi input
 	vision_frame_t frame;
@@ -155,10 +156,12 @@ public:
 	}
 
 	bool GetOffHab() {
-		if(DriveDistance(36,0.05)) {
+		if(DriveDistance(36,1)) {
 			ResetEncoders();
-			cout << "returning true\n"; 
+			isOffHab = true; 
 			return true;
+		} else {
+			return false;
 		}
 	}
 
@@ -179,7 +182,9 @@ public:
 		isAuton = leftShoulder;
 
 		if(isAuton) {
-			GetOffHab();
+			if(!isOffHab) {
+				GetOffHab();
+			}		
 		}
 		else {
 			leftTarget = leftjoyY;
@@ -380,7 +385,7 @@ public:
 			return 1;
 		} else if (abs(frame.line_offset) >= 2.5 || (dock_state > 0 && dock_state < 3)) {
 			if (dock_state == 0) {
-				if (RotateAngle((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1), false)) {
+				if (TurnDegrees((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1))) {
 					ResetEncoders();
 					dock_state = 1;
 				}
@@ -392,7 +397,7 @@ public:
 				}
 				return 0;
 			} else if (dock_state == 2) {
-				if (RotateAngle(90 * (frame.line_offset < 0 ? 1 : -1), false)) {
+				if (TurnDegrees(90 * (frame.line_offset < 0 ? 1 : -1))) {
 					ResetEncoders();
 					dock_state = 0;
 				}
@@ -401,7 +406,7 @@ public:
 		} else if (frame.error) {
 			return -1;
 		} else {
-			if (RotateAngle(-frame.angle, false)) {
+			if (TurnDegrees(-frame.angle)) {
 				ResetEncoders();
 				dock_state = 0;
 			}
@@ -443,9 +448,9 @@ public:
 
 	}
 
-	bool SetPistonExtended(int pistonID){
-		return false;
-	}
+	// bool SetPistonExtended(int pistonID){
+	// 	return false;
+	// }
 
 	void PlaceHatch(){
 
