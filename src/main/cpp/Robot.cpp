@@ -239,7 +239,7 @@ public:
 
 
 	bool DriveDistance(double inches, float speed) {
-		//speed is a presentage from 0.0 to 1.0
+		//speed is a percentage from 0.0 to 1.0
 
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
@@ -258,7 +258,7 @@ public:
 		if(speed > 1)
 		speed = 1;
 		if(speed < 0)
-		speed =0;
+		speed = 0;
 		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
 		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
