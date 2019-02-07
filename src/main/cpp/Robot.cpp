@@ -56,7 +56,11 @@ private:
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
-	
+	bool isDone = false;
+
+
+
+
 	//raspi input
 	vision_frame_t frame;
 
@@ -217,14 +221,25 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		UpdateRaspiInput();
-		isAuton = leftShoulder;
-
+		if(leftShoulder) {
+			isAuton=true;	
+		} else {
+			isAuton=false;
+			ResetEncoders();	
+			ResetGyro();
+		}
 		if(isAuton) {
-			if(!isOffHab) {
+			/*if(!isOffHab) {
 				GetOffHab();
-			}		
+			}*/
+			
+				if(DriveDistance(12,1)){
+				TurnDegrees(180);
+				}
+			
 		}
 		else {
+			
 			leftTarget = leftjoyY;
 			rightTarget = rightjoyY;
 			
@@ -234,7 +249,7 @@ public:
 
 			
 		}
-
+		
 	}
 
 	// polls the xbox for input
@@ -284,7 +299,7 @@ public:
 	//call this every tick to get off the hab
 	bool GetOffHab() {
 		//returns true when done
-		if(DriveDistance(36,1)) {
+		if(DriveDistance(36,0)) {
 			ResetEncoders();
 			isOffHab = true; 
 			return true;
@@ -311,12 +326,17 @@ public:
 		}
 		//cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
-		if(speed > 1)
-		speed = 1;
-		if(speed < 0)
-		speed = 0;
+		if(speed > 1){
+			speed = 1;
+		}
+		if(speed <= 0.01) {
+			speed = 0.01;
+		}
 		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
 		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
+		leftLeader.ConfigMotionAcceleration((1 / speed) * Constant::leftMotionAcc);
+		cout << (0.5 / speed) * Constant::leftMotionAcc << endl;
+		rightLeader.ConfigMotionAcceleration((1 / speed) * Constant::rightMotionAcc);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
@@ -404,6 +424,8 @@ public:
 
 	//call every tick to climb hab
 	bool Climb() {
+		
+
 		//returns true when done
 		return false; // unimplemented
 	}
