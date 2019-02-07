@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <csignal>
 #include <fcntl.h>
-#include <cmath>
+#include <math.h>
 // #include <wiringSerial.h>
 #pragma region 
 /*

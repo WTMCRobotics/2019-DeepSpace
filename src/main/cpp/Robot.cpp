@@ -436,6 +436,7 @@ public:
 
 	//this is a duplicate of ApproachLine()
 	//TODO is this better than ApproachLine()?
+	// returns 0 if needs to be run again, 1 if done, -1 if impossible
 	uint8_t dock_state = 0;
 	int DockRobot() {
 		if (!IsVisionAvailable()) return -1;
