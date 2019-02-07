@@ -299,7 +299,7 @@ public:
 	//call this every tick to get off the hab
 	bool GetOffHab() {
 		//returns true when done
-		if(DriveDistance(36,1)) {
+		if(DriveDistance(36,0)) {
 			ResetEncoders();
 			isOffHab = true; 
 			return true;
@@ -326,12 +326,17 @@ public:
 		}
 		//cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
 
-		if(speed > 1)
-		speed = 1;
-		if(speed < 0)
-		speed = 0;
+		if(speed > 1){
+			speed = 1;
+		}
+		if(speed <= 0.01) {
+			speed = 0.01;
+		}
 		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
 		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
+		leftLeader.ConfigMotionAcceleration((1 / speed) * Constant::leftMotionAcc);
+		cout << (0.5 / speed) * Constant::leftMotionAcc << endl;
+		rightLeader.ConfigMotionAcceleration((1 / speed) * Constant::rightMotionAcc);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
