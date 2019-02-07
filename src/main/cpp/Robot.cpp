@@ -58,8 +58,8 @@ private:
 	bool isOffHab = false;
 	bool isDone = false;
 
-
-
+	float resetableGyro = 0;
+	float customGyroOfset = 0;
 
 	//raspi input
 	vision_frame_t frame;
@@ -221,20 +221,23 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		UpdateRaspiInput();
+
 		if(leftShoulder) {
 			isAuton=true;	
 		} else {
 			isAuton=false;
 			ResetEncoders();	
 			ResetGyro();
+			cout << "notAuton" << endl;
 		}
+
 		if(isAuton) {
 			/*if(!isOffHab) {
 				GetOffHab();
 			}*/
 			
-				if(DriveDistance(12,1)){
-				TurnDegrees(180);
+				if(DriveDistance(12,0.1)){
+				//TurnDegrees(180);
 				}
 			
 		}
@@ -280,7 +283,7 @@ public:
 
 	//gets inputs from raspi
 	void UpdateRaspiInput() {
-		frame = getFrame(serial_port);
+		/*frame = getFrame(serial_port);
 		if (frame.error) {
 			if (frame.error & VISION_ERROR_NO_DATA) missed_frames++;
 			return;
@@ -293,7 +296,7 @@ public:
 			//cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
 		last_frame_time = time_clock.now();
-		missed_frames = 0;
+		missed_frames = 0;*/
 	}
 
 	//call this every tick to get off the hab
@@ -422,6 +425,12 @@ public:
 	}
 
 	//set the current gyro angle to 0 simalar to ResetEncoders()
+	void ResetCustomGyro() {
+
+	}
+
+
+	// only call at the begging of match
 	// may make code hang for a little bit
 	void ResetGyro() {
 		pGyro->ZeroYaw();
