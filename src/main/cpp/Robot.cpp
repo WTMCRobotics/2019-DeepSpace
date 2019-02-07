@@ -354,7 +354,7 @@ public:
 		float x;
 		float y;
 		float targetAngle = (float)atan(y / x) * 180 / PI;
-		if(fabs(targetAngle - frame.angle) < ANGLE_MAX_ERROR) {
+		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR) {
 			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
 			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
 			for(int i = 0; i < 100; i++){
@@ -363,14 +363,14 @@ public:
 			return true;
 		}
 		else{
-			outPut[0] = DIST_TO_MANTAIN_FINAL_ANGLE;
+			outPut[0] = Constant::DIST_TO_MANTAIN_FINAL_ANGLE;
 			float alinedAtX;
 			float alinedAtY;
-			if(fabs(targetAngle - frame.angle) < (HORIZONTAL_FOV / 2)){
+			if(fabs(targetAngle - frame.angle) < (Constant::HORIZONTAL_FOV / 2)){
 			}
 			else{
-				outPut[2] = DIST_TO_MANTAIN_CAM_ANGLE;
-				outPut[1] = HORIZONTAL_FOV / 2;
+				outPut[2] = Constant::DIST_TO_MANTAIN_CAM_ANGLE;
+				outPut[1] = Constant::HORIZONTAL_FOV / 2;
 			}
 		}
 		return false;
