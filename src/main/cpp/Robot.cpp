@@ -56,7 +56,11 @@ private:
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
-	
+	bool isDone = false;
+
+
+
+
 	//raspi input
 	vision_frame_t frame;
 
@@ -217,14 +221,25 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		UpdateRaspiInput();
-		isAuton = leftShoulder;
-
+		if(leftShoulder) {
+			isAuton=true;	
+		} else {
+			isAuton=false;
+			ResetEncoders();	
+			ResetGyro();
+		}
 		if(isAuton) {
-			if(!isOffHab) {
+			/*if(!isOffHab) {
 				GetOffHab();
-			}		
+			}*/
+			
+				if(DriveDistance(12,1)){
+				TurnDegrees(180);
+				}
+			
 		}
 		else {
+			
 			leftTarget = leftjoyY;
 			rightTarget = rightjoyY;
 			
@@ -234,7 +249,7 @@ public:
 
 			
 		}
-
+		
 	}
 
 	// polls the xbox for input
@@ -415,6 +430,8 @@ public:
 
 	//call every tick to climb hab
 	bool Climb() {
+		
+
 		//returns true when done
 		return false; // unimplemented
 	}
