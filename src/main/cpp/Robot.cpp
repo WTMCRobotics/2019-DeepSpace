@@ -70,6 +70,7 @@ private:
 	uint8_t vision_threshold;
 	chrono::steady_clock time_clock;
 	chrono::steady_clock::time_point last_frame_time;
+	unsigned int missed_frames = 0;
 
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
@@ -266,6 +267,7 @@ public:
 	void UpdateRaspiInput() {
 		frame = getFrame(serial_port);
 		if (frame.error) {
+			if (frame.error & VISION_ERROR_NO_DATA) missed_frames++;
 			return;
 		}
 		if (frameIsInfo(frame)) {
@@ -276,6 +278,7 @@ public:
 			//cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
 		}
 		last_frame_time = time_clock.now();
+		missed_frames = 0;
 	}
 
 	//call this every tick to get off the hab
@@ -418,18 +421,24 @@ public:
 		return false; // unimplemented
 	}
 
+	// Checks if vision is active and available
+	bool IsVisionAvailable() {
+		return missed_frames < 50;
+	}
+
 	//checks if auton can ApproachLine()
 	bool IsLineApproachable() {
 		if (chrono::duration_cast<chrono::milliseconds>(time_clock.now() - last_frame_time).count() > 35) // old frame is outdated
 			UpdateRaspiInput();
 		return (abs(frame.angle) < 1 && abs(frame.line_offset) < 2.5 &&      // thresholds
-		        frame.angle != 0 && frame.line_offset != 0 && !frame.error); // check for problems
+		        frame.angle != 0 && frame.line_offset != 0 && !frame.error && IsVisionAvailable()); // check for problems
 	}
 
 	//this is a duplicate of ApproachLine()
 	//TODO is this better than ApproachLine()?
 	uint8_t dock_state = 0;
 	int DockRobot() {
+		if (!IsVisionAvailable()) return -1;
 		if (IsLineApproachable()) {
 			if (frame.wall_distance > 3) {
 				if (DriveDistance(frame.wall_distance / (4 * 2.54), 0.5)) ResetEncoders();
@@ -457,7 +466,7 @@ public:
 				return 0;
 			}
 		} else if (frame.error) {
-			return -1;
+			return 0;
 		} else {
 			if (TurnDegrees(-frame.angle)) {
 				ResetEncoders();
