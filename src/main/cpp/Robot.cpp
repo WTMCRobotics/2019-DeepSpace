@@ -342,6 +342,7 @@ public:
 	bool ApproachLine(float targetDistance) {
 		//returns true when done
 		CalculateAutonInstructions();
+		return false; // unimplemented
 	}
 
 	//call this to update autonInstructions[] make sure to call UpdateRaspiInput() first
@@ -399,8 +400,9 @@ public:
 	}
 
 	//call every tick to climb hab
-	void Climb() {
+	bool Climb() {
 		//returns true when done
+		return false; // unimplemented
 	}
 
 	//sets "pistonID" to extended if true and retracted if false
@@ -413,11 +415,10 @@ public:
 	//TODO
 	bool GetPistonExtended(int pistonID){
 		//returns true if "pistonID" is extended false if retracted
-		
+		return false; // unimplemented
 	}
 
 	//checks if auton can ApproachLine()
-	//TODO
 	bool IsLineApproachable() {
 		if (chrono::duration_cast<chrono::milliseconds>(time_clock.now() - last_frame_time).count() > 35) // old frame is outdated
 			UpdateRaspiInput();
@@ -470,7 +471,7 @@ public:
 	//TODO
 	bool RetrieveHatch(){
 		//returns true when done
-
+		return false; // unimplemented
 	}
 
 	//call every tick to place the hatch pannel on a rocket or cargoship
@@ -481,12 +482,14 @@ public:
 		//SetArmAngle();
 		//DriveDistance();
 		//EjectHatch();
+		return false; // unimplemented
 	}
 
 	//call every tick to set the arm angle to "angle"
 	//TODO
 	bool SetArmAngle(float angle){
 		//returns true when done
+		return false; // unimplemented
 	}
 
 	//fires pistons to remove hatch from robot velcrow
@@ -498,7 +501,7 @@ public:
 	// call every tick to put the orange ball in a cargoship/rocket
 	bool PlaceCargo(){
 		//returns true when done
-
+		return false; // unimplemented
 	}
 
 	//spins weels to shot out cargo
