@@ -385,8 +385,13 @@ public:
 		return false;
 	}
 
-	//TODO make a comment that explains what this does
+	//turns right if positve left if negitive || turns right for less than 180 and left for greater than 180
 	bool TurnDegrees(double degrees) {
+		//returns true when done
+		if(degrees < 0){
+			degrees += 360;
+		}
+
 		cout << pGyro->GetYaw() << endl;
 
 		if(pidAngle.GetSetpoint() != degrees) {
@@ -401,7 +406,8 @@ public:
 		}
 	}
 
-	//TODO add a coment here explaning what ResetGyro() does
+	//set the current gyro angle to 0 simalar to ResetEncoders()
+	// may make code hang for a little bit
 	void ResetGyro() {
 		pGyro->ZeroYaw();
 		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
