@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <csignal>
 #include <fcntl.h>
-#include <cmath>
+#include <math.h>
 // #include <wiringSerial.h>
 #pragma region 
 /*
@@ -233,6 +233,7 @@ int serialGetchar (const int fd)
 #pragma endregion
 #include <chrono>
 #include <opencv2/opencv.hpp>
+#include "MJPEGWriter.h"
 using namespace cv;
 using namespace std::chrono;
 
@@ -311,6 +312,7 @@ int main(int argc, const char * argv[]) {
     capture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
     capture.set(CV_CAP_PROP_CONTRAST, 1.0);
     capture.set(CV_CAP_PROP_BRIGHTNESS, brightness);
+    MJPEGWriter imgout(80);
     #ifdef JETSON
     serout = serialOpen("/dev/ttyTHS2", 9600);
     #else
@@ -321,6 +323,7 @@ int main(int argc, const char * argv[]) {
     #endif
     if (argc > 1) verbose = true;
     initTime();
+    imgout.start();
     fcntl (serout, F_SETFL, O_NONBLOCK);
     {
         uint32_t frames[4];
@@ -478,7 +481,9 @@ ErrorLine:
         ::write(serout, frames, 16);
 
         // output final image
+        imgout.write(frame);
         outputImage(cdst, success);
     }
+    imgout.stop();
     return 0;
 }
