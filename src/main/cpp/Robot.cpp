@@ -238,9 +238,11 @@ public:
 			
 		}
 		else {
-			
-			leftTarget = leftjoyY;
-			rightTarget = rightjoyY;
+			//this will be a number between 0.25 and 1.0
+			double amountToSlowBy = (1- rightTrigger * 0.5) * (1- leftTrigger * 0.5);
+
+			leftTarget = leftjoyY * amountToSlowBy;
+			rightTarget = rightjoyY * amountToSlowBy;
 			
 			//Set the motors to the motor targets
 			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
@@ -263,12 +265,14 @@ public:
 		//Tank drive both stick
 		leftjoyY = -xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+		leftTrigger = xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand);
+		rightTrigger = xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand);
 		
 		//Auton overide
 		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
 
 
-#ifdef FINEMOTIONCONTROL
+		/*#ifdef FINEMOTIONCONTROL
 		//If right trigger pressed
 		if((xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
 			//Kinda slow down
@@ -281,7 +285,7 @@ public:
 			leftjoyY = leftjoyY / 3;
 			rightjoyY = rightjoyY / 3;
 		}
-#endif
+		#endif*/
 	}
 
 	//gets inputs from raspi
