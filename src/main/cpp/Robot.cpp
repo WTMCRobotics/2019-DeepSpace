@@ -56,10 +56,8 @@ private:
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
-	bool isDone = false;
 
-	//  customGyroOfset + resetableGyro = pGyro->GetYaw()
-	float resetableGyro = 0;
+	//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
 	float customGyroOfset = 0;
 
 	//raspi input
@@ -83,7 +81,7 @@ private:
 	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
-	float autonInstructions [100] = {};  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+	float autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
 
 
 	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
@@ -203,7 +201,7 @@ public:
 
 	//is called once at the begining of the mathc in 2019
 	void TeleopInit() {
-		ResetGyro();
+		CalibrateGyro();
 		ResetEncoders();
 	}
 
@@ -222,15 +220,11 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		UpdateRaspiInput();
-		UpdateCustomGyro();
 
 		if(leftShoulder) {
 			isAuton=true;	
 		} else {
 			isAuton=false;
-			ResetEncoders();	
-			ResetCustomGyro();
-			cout << "notAuton" << endl;
 		}
 
 		if(isAuton) {
@@ -239,9 +233,7 @@ public:
 				GetOffHab();
 			} else {
 			*/
-				if(DriveDistance(12,0.1)){
-				TurnDegrees(180);
-				}
+				FollowAutonInstructions();
 			//}
 			
 		}
@@ -254,6 +246,12 @@ public:
 			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
+			//gets things ready for when auton is enabled
+			ResetEncoders();	
+			ResetGyro();
+
+			autonInstructions[1] = 180;
+			autonInstructions[2] = 18;			
 			
 		}
 		
@@ -315,15 +313,48 @@ public:
 		}
 	}
 
+	//folows instructions in autonInstructions[]
+	//TODO
+	bool FollowAutonInstructions() {
+		//returns true if done
+		int currentInstrusction = Constant::MAX_AUTON_INSTRUCTIONS -1;
+		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
+			currentInstrusction--;
+		}
+		//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+		if(currentInstrusction % 2){
+			//distance
+			if(DriveDistance(autonInstructions[currentInstrusction], 1)) {
+				autonInstructions[currentInstrusction] = 0;
+				ResetEncoders();
+				ResetGyro();
+			}
+		} else {
+			//angle
+			if(TurnDegrees(autonInstructions[currentInstrusction])) {
+				autonInstructions[currentInstrusction] = 0;
+				ResetEncoders();
+				ResetGyro();
+			}
+
+		}
+		//returns true if the last step is completed
+		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 0);
+	}
+
 	//drives "inches" inches at "speed" the cruise velocity
 	bool DriveDistance(double inches, float speed) {
-		//speed is a percentage from 0.0 to 1.0
+		/*
+		 *returns true when done
+		 *
+		 *speed is a percentage from 0.0 to 1.0
+		 *
+		 * inches / circumference = number of rotations
+		 * pulsesPerRotationQuad = number of pulses in one rotation
+		 * targetEncPos = position encoder should read
+		 *int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+		 */
 
-		// inches / circumference = number of rotations
-		// * pulsesPerRotationQuad = number of pulses in one rotation
-		// targetEncPos = position encoder should read
-		//int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
-		
 		int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
 
 		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
@@ -380,7 +411,7 @@ public:
 	bool CalculateAutonInstructions() {
 		//returns true if AutonInstructions have bean generated successfully
 
-		float outPut [100] = {}; //autonInstructions will be set to this if successful
+		float outPut [Constant::MAX_AUTON_INSTRUCTIONS] = {}; //autonInstructions will be set to this if successful
 
 		float x;
 		float y;
@@ -388,7 +419,7 @@ public:
 		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR) {
 			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
 			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
-			for(int i = 0; i < 100; i++){
+			for(int i = 0; i < Constant::MAX_AUTON_INSTRUCTIONS; i++){
 				autonInstructions[i] = outPut[i];
 			}
 			return true;
@@ -414,8 +445,6 @@ public:
 			degrees += 360;
 		}
 
-		cout << pGyro->GetYaw() << endl;
-
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
 		}
@@ -429,21 +458,22 @@ public:
 	}
 
 	//set the current gyro angle to 0 simalar to ResetEncoders()
-	void ResetCustomGyro() {
-		//  customGyroOfset + resetableGyro = pGyro->GetYaw()
+	void ResetGyro() {
+		//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
 		customGyroOfset = -1 * pGyro->GetYaw();
-		UpdateCustomGyro();
 	}
 
-	void UpdateCustomGyro() {
-		resetableGyro = pGyro->GetYaw() - customGyroOfset;
+	// use this instead of pGyro->GetYaw()
+	float GetGyroYaw() {
+		return pGyro->GetYaw() + customGyroOfset;
 	}
 
 	// only call at the begging of match
 	// may make code hang for a little bit
-	void ResetGyro() {
+	void CalibrateGyro() {
 		pGyro->ZeroYaw();
 		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
+		ResetGyro();
 	}
 
 	//call every tick to climb hab

@@ -36,6 +36,8 @@ public:
 	static constexpr double rightMotionVel = 6000;
 	static constexpr double rightMotionAcc = 2000;
 
+	static constexpr int MAX_AUTON_INSTRUCTIONS = 100;
+
 	//Robot propeties
 	static constexpr float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0;  //TODO set this to correct value
 	static constexpr float DIST_CENTER_AXEL_TO_CAM = 1.0;  //TODO set this to correct value
