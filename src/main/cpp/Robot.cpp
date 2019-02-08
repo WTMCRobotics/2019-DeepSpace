@@ -250,8 +250,9 @@ public:
 			ResetEncoders();	
 			ResetGyro();
 
+			//this hardcodes the program to move 2 feet forward then turn 180 degrese
 			autonInstructions[1] = 180;
-			autonInstructions[2] = 18;			
+			autonInstructions[2] = 2 * 12;			
 			
 		}
 		
