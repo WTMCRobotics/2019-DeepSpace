@@ -81,7 +81,7 @@ private:
 	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
-	float autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+	double autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
 
 
 	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
@@ -228,13 +228,14 @@ public:
 		}
 
 		if(isAuton) {
-			//gets of hab if on hab
+			/*//gets of hab if on hab
 			if(!isOffHab) {
 				GetOffHab();
 			} else {
 				//this code will run once off hab
 				FollowAutonInstructions();
-			}
+			}*/
+			TurnDegrees(180);
 			
 		}
 		else {
@@ -312,8 +313,10 @@ public:
 		if(DriveDistance(36,0.1)) {
 			ResetEncoders();
 			isOffHab = true; 
+			cout << "off hab" << endl;
 			return true;
 		} else {
+			cout << "geting off hab" << endl;
 			return false;
 		}
 	}
@@ -326,16 +329,21 @@ public:
 		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
 			currentInstrusction--;
 		}
+		cout << currentInstrusction << endl;
+		cout << autonInstructions[currentInstrusction] << endl;
 		//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
-		if(currentInstrusction % 2){
+		if(currentInstrusction % 2 == 0){
 			//distance
+			cout << "even" << endl;
 			if(DriveDistance(autonInstructions[currentInstrusction], 1)) {
+				cout << "done DriveDistanceing" << endl;
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
 				ResetGyro();
 			}
 		} else {
 			//angle
+			cout << "odd" << endl;
 			if(TurnDegrees(autonInstructions[currentInstrusction])) {
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
@@ -378,7 +386,7 @@ public:
 		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
 		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
 		leftLeader.ConfigMotionAcceleration((1 / speed) * Constant::leftMotionAcc);
-		cout << (0.5 / speed) * Constant::leftMotionAcc << endl;
+		//coutcout << (0.5 / speed) * Constant::leftMotionAcc << endl;
 		rightLeader.ConfigMotionAcceleration((1 / speed) * Constant::rightMotionAcc);
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
@@ -450,10 +458,20 @@ public:
 			degrees += 360;
 		}
 
+		if(!pidAngle.IsEnabled()) {
+			pidAngle.Enable();
+		}
+		//cout << "pidAngle.GetSetpoint() " << pidAngle.GetSetpoint() << endl;
+		//cout << "degrees " << degrees << endl;
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
+			cout << "pidAngle.SetSetpoint(degrees);" << endl;
 		}
 
+		if(pidAngle.IsEnabled())
+		cout << "pidAngle.IsEnabled() " << endl;
+		if(pidAngle.OnTarget())
+		cout << "pidAngle.OnTarget() " << endl;
 		if(pidAngle.IsEnabled() && pidAngle.OnTarget()) {
 			pidAngle.Disable();
 			return true;
