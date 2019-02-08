@@ -58,6 +58,7 @@ private:
 	bool isOffHab = false;
 	bool isDone = false;
 
+	//  customGyroOfset + resetableGyro = pGyro->GetYaw()
 	float resetableGyro = 0;
 	float customGyroOfset = 0;
 
@@ -221,24 +222,27 @@ public:
 	void Drive() {
 		UpdateControllerInputs();
 		UpdateRaspiInput();
+		UpdateCustomGyro();
 
 		if(leftShoulder) {
 			isAuton=true;	
 		} else {
 			isAuton=false;
 			ResetEncoders();	
-			ResetGyro();
+			ResetCustomGyro();
 			cout << "notAuton" << endl;
 		}
 
 		if(isAuton) {
-			/*if(!isOffHab) {
+			/*
+			if(!isOffHab) {
 				GetOffHab();
-			}*/
-			
+			} else {
+			*/
 				if(DriveDistance(12,0.1)){
-				//TurnDegrees(180);
+				TurnDegrees(180);
 				}
+			//}
 			
 		}
 		else {
@@ -426,9 +430,14 @@ public:
 
 	//set the current gyro angle to 0 simalar to ResetEncoders()
 	void ResetCustomGyro() {
-
+		//  customGyroOfset + resetableGyro = pGyro->GetYaw()
+		customGyroOfset = -1 * pGyro->GetYaw();
+		UpdateCustomGyro();
 	}
 
+	void UpdateCustomGyro() {
+		resetableGyro = pGyro->GetYaw() - customGyroOfset;
+	}
 
 	// only call at the begging of match
 	// may make code hang for a little bit
