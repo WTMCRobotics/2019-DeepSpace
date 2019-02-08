@@ -228,13 +228,13 @@ public:
 		}
 
 		if(isAuton) {
-			/*
+			//gets of hab if on hab
 			if(!isOffHab) {
 				GetOffHab();
 			} else {
-			*/
+				//this code will run once off hab
 				FollowAutonInstructions();
-			//}
+			}
 			
 		}
 		else {
@@ -309,7 +309,7 @@ public:
 	//call this every tick to get off the hab
 	bool GetOffHab() {
 		//returns true when done
-		if(DriveDistance(36,0)) {
+		if(DriveDistance(36,0.1)) {
 			ResetEncoders();
 			isOffHab = true; 
 			return true;
