@@ -26,6 +26,6 @@ PIDMotorOutput::~PIDMotorOutput()
 
 void PIDMotorOutput::PIDWrite(double value)
 {
-	pLeftMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, value);
-	pRightMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -value);
+	pLeftMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, value/2);
+	pRightMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -value/2);
 }

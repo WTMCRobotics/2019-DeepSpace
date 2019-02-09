@@ -61,6 +61,10 @@ private:
 	float customGyroOfset = 0;
 	float gyroTarget;
 
+	bool waiting = false;
+
+	float AllowedAngleError = 2.0;
+
 	//raspi input
 	vision_frame_t frame;
 
@@ -79,7 +83,7 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { 0.0073, 0.000015, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { 0.045, 0.0000, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 
 public:
@@ -210,17 +214,19 @@ public:
 
 	//this code gets call once every tick or about 50 times per second
 	void TeleopPeriodic() {
-		Drive();
-		//cout << DriveDistance(6 * 3.14, 1) << endl;
-		//DriveDistance(1, 1);
-		//cout << gyro->GetAngle() << endl;
-		
-		//cout << rightLeader.GetSelectedSensorPosition() << endl;
-		//cout << leftLeader.GetSelectedSensorPosition() << endl;
+		if(waiting == true){
+			Drive();
+			//cout << DriveDistance(6 * 3.14, 1) << endl;
+			//DriveDistance(1, 1);
+			//cout << gyro->GetAngle() << endl;
+			//cout << rightLeader.GetSelectedSensorPosition() << endl;
+			//cout << leftLeader.GetSelectedSensorPosition() << endl;
+		}
 	}
 
 	//this gets called every tick and contans all the drivetrain related code
 	void Drive() {
+		if(waiting == true){
 		UpdateControllerInputs();
 		UpdateRaspiInput();
 
@@ -232,16 +238,14 @@ public:
 
 		if(isAuton) {
 			//gets of hab if on hab
-			/*if(!isOffHab) {
-				//GetOffHab();
-			} else {
+			//if(!isOffHab) {
+			//	GetOffHab();
+			//} else {
 				//this code will run once off hab
 				FollowAutonInstructions();
-			}*/
+			//}
 			
-			if(TurnDegrees(45 + 90)) {
-				cout << "done" << endl;
-			}
+			
 		
 		}
 		else {
@@ -261,11 +265,13 @@ public:
 			ResetGyro();
 
 			//this hardcodes the program to move 2 feet forward then turn 180 degrese
-			autonInstructions[1] = 180;
-			autonInstructions[2] = 2 * 12;			
+			//autonInstructions[1] = 0;
+			//autonInstructions[2] = 12;
+			autonInstructions[3] = 90;
+			//autonInstructions[4] = 2 * 12;			
 			
 		}
-		
+		}
 	}
 
 	// polls the xbox for input
@@ -330,29 +336,35 @@ public:
 	//TODO
 	bool FollowAutonInstructions() {
 		//returns true if done
+		cout << autonInstructions[1] << " , " << autonInstructions[2] << " , " << autonInstructions[3] << " , " << autonInstructions[4] << endl;
+		//cout << "following auton" << " , ";
 		int currentInstrusction = Constant::MAX_AUTON_INSTRUCTIONS -1;
 		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
 			currentInstrusction--;
 		}
 		//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
-		if(currentInstrusction % 2){
+		if((currentInstrusction % 2) == 0){
 			//distance
+			cout << "driving distance" << endl;
 			if(DriveDistance(autonInstructions[currentInstrusction], 1)) {
+				cout << "distance driven" << endl;
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
 				ResetGyro();
 			}
 		} else {
 			//angle
+			cout << "turning angle" << endl;
 			if(TurnDegrees(autonInstructions[currentInstrusction])) {
+				cout << "angle turned" << endl;
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
 				ResetGyro();
 			}
-
+		
 		}
 		//returns true if the last step is completed
-		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 0);
+		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1);
 	}
 
 	//drives "inches" inches at "speed" the cruise velocity
@@ -454,9 +466,21 @@ public:
 	//turns right if positve left if negitive || turns right for less than 180 and left for greater than 180
 	bool TurnDegrees(double degrees) {
 		//returns true when done
+		if(degrees == 0){
+		return true;
+		}
+		
 		if(!pidAngle.IsEnabled()) {
 			pidAngle.Enable();
 		}
+		/*
+		if(pidAngle.GetError() > 180){
+			pidAngle.SetSetpoint(pidAngle.GetSetpoint()-360);
+		}
+		
+		if(pidAngle.GetError() < -180){
+			pidAngle.SetSetpoint(pidAngle.GetSetpoint()+360); 
+		}*/
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
@@ -464,7 +488,7 @@ public:
 
 		cout << pidAngle.GetError() << endl;
 
-		if(pidAngle.IsEnabled() && pidAngle.OnTarget()) {
+		if(pidAngle.IsEnabled() && abs(pidAngle.GetError()) < AllowedAngleError ) {
 			pidAngle.Disable();
 			return true;
 		} else {
@@ -487,7 +511,12 @@ public:
 	// may make code hang for a little bit
 	void CalibrateGyro() {
 		pGyro->ZeroYaw();
-		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
+		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {
+			cout << "calibrating gyro" << endl;
+			waiting = false;
+		}
+		cout << "gyro caibrated" << endl;
+		waiting = true;
 		ResetGyro();
 	}
 
