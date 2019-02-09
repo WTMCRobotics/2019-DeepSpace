@@ -59,6 +59,7 @@ private:
 
 	//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
 	float customGyroOfset = 0;
+	float gyroTarget;
 
 	//raspi input
 	vision_frame_t frame;
@@ -78,7 +79,8 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { .0073, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { 0.0073, 0.000015, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };
+
 
 public:
 	float autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
@@ -203,6 +205,7 @@ public:
 	void TeleopInit() {
 		CalibrateGyro();
 		ResetEncoders();
+		ResetGyro();
 	}
 
 	//this code gets call once every tick or about 50 times per second
@@ -229,17 +232,22 @@ public:
 
 		if(isAuton) {
 			//gets of hab if on hab
-			if(!isOffHab) {
-				GetOffHab();
+			/*if(!isOffHab) {
+				//GetOffHab();
 			} else {
 				//this code will run once off hab
 				FollowAutonInstructions();
+			}*/
+			
+			if(TurnDegrees(45 + 90)) {
+				cout << "done" << endl;
 			}
-
+		
 		}
 		else {
 			//this will be a number between 0.25 and 1.0
-			double amountToSlowBy = (1- rightTrigger * 0.5) * (1- leftTrigger * 0.5);
+			pidAngle.Disable();
+			double amountToSlowBy = (1- (rightTrigger * 0.5)) * (1- (leftTrigger * 0.5));
 
 			leftTarget = leftjoyY * amountToSlowBy;
 			rightTarget = rightjoyY * amountToSlowBy;
@@ -446,13 +454,15 @@ public:
 	//turns right if positve left if negitive || turns right for less than 180 and left for greater than 180
 	bool TurnDegrees(double degrees) {
 		//returns true when done
-		if(degrees < 0){
-			degrees += 360;
+		if(!pidAngle.IsEnabled()) {
+			pidAngle.Enable();
 		}
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
 		}
+
+		cout << pidAngle.GetError() << endl;
 
 		if(pidAngle.IsEnabled() && pidAngle.OnTarget()) {
 			pidAngle.Disable();
@@ -479,9 +489,6 @@ public:
 		pGyro->ZeroYaw();
 		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {}
 		ResetGyro();
-		pidAngle.SetP(0);
-		pidAngle.SetI(0);
-		pidAngle.SetD(0);
 	}
 
 	//call every tick to climb hab
