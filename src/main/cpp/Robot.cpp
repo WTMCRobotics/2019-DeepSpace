@@ -53,6 +53,13 @@ private:
 	bool rightShoulder;//not used yet
 	bool leftShoulder;
 
+	bool gbutton1;
+	bool gbutton2;
+	bool gbutton3;
+	bool gbutton4;
+	bool gbutton5;
+	bool gbutton6;
+
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
@@ -264,12 +271,46 @@ public:
 			ResetEncoders();	
 			ResetGyro();
 
-			//this hardcodes the program to move 2 feet forward then turn 180 degrese
-			//autonInstructions[1] = 0;
-			//autonInstructions[2] = 12;
-			autonInstructions[3] = 90;
-			//autonInstructions[4] = 2 * 12;			
+			if(gbutton1){
 			
+				autonInstructions[2] = 18 * 12;
+				autonInstructions[3] = -149;
+				autonInstructions[4] = -4 * 12;
+			}
+
+			if(gbutton2){
+				autonInstructions[1] = 54
+				autonInstructions[2] = 20.85 * 12;
+				autonInstructions[3] = -154;
+				autonInstructions[4] = -4 * 12;
+			}
+
+			if(gbutton3){
+				autonInstructions[1] = 66
+				autonInstructions[2] = 22.37 * 12;
+				autonInstructions[3] = -156;
+				autonInstructions[4] = -4 * 12;
+			}
+
+			if(gbutton4){
+				autonInstructions[1] = 68
+				autonInstructions[2] = 24 * 12;
+				autonInstructions[3] = -158;
+				autonInstructions[4] = -4 * 12;
+			}
+
+			if(gbutton5){
+				autonInstructions[1] = 76
+				autonInstructions[2] = 19.34 * 12;
+				autonInstructions[3] = -166;
+				autonInstructions[4] = -4 * 12;
+			}
+			
+			if(gbutton6){
+				autonInstructions[2] = 13 * 12;
+				autonInstructions[3] = 180;
+				autonInstructions[4] = -4 * 12;
+			}
 		}
 		}
 	}
@@ -364,6 +405,10 @@ public:
 		
 		}
 		//returns true if the last step is completed
+		if(autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1){
+			DockRobot();
+		}
+
 		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1);
 	}
 
