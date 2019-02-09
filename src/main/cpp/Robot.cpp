@@ -355,6 +355,11 @@ public:
 		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 0);
 	}
 
+	//clears all instructions in autonInstructions[]
+	void ClearAutonInstructions() {
+		for (int i = 0; i < Constant::MAX_AUTON_INSTRUCTIONS; i++) autonInstructions[i] = 0;
+	}
+
 	//drives "inches" inches at "speed" the cruise velocity
 	bool DriveDistance(double inches, float speed) {
 		/*
@@ -531,39 +536,32 @@ public:
 	uint8_t dock_state = 0;
 	int DockRobot() {
 		if (!IsVisionAvailable()) return -1;
+		if (dock_state == 1) {
+			if (FollowAutonInstructions()) dock_state = 0;
+			return 0;
+		}
 		if (IsLineApproachable()) {
-			if (frame.wall_distance > 3) {
-				if (DriveDistance(frame.wall_distance / (4 * 2.54), 0.5)) ResetEncoders();
-				else return 0;
+			if (frame.wall_distance > 3 && !(frame.error & VISION_ERROR_BAD_DISTANCE)) {
+				ClearAutonInstructions();
+				autonInstructions[0] = frame.wall_distance / (4 * 2.54);
+				dock_state = 1;
+				return 0;
 			}
 			return 1;
-		} else if (abs(frame.line_offset) >= 2.5 || (dock_state > 0 && dock_state < 3)) {
-			if (dock_state == 0) {
-				if (TurnDegrees((90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1))) {
-					ResetEncoders();
-					dock_state = 1;
-				}
-				return 0;
-			} else if (dock_state == 1) {
-				if (DriveDistance(frame.line_offset / 2.54, 0.5)) {
-					ResetEncoders();
-					dock_state = 2;
-				}
-				return 0;
-			} else if (dock_state == 2) {
-				if (TurnDegrees(90 * (frame.line_offset < 0 ? 1 : -1))) {
-					ResetEncoders();
-					dock_state = 0;
-				}
-				return 0;
-			}
+		} else if (abs(frame.line_offset) >= 2.5) {
+			ClearAutonInstructions();
+			autonInstructions[3] = (90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1);
+			autonInstructions[2] = frame.line_offset / 2.54;
+			autonInstructions[1] = 90 * (frame.line_offset < 0 ? 1 : -1);
+			autonInstructions[0] = 0;
+			dock_state = 1;
+			return 0;
 		} else if (frame.error) {
 			return 0;
 		} else {
-			if (TurnDegrees(-frame.angle)) {
-				ResetEncoders();
-				dock_state = 0;
-			}
+			ClearAutonInstructions();
+			autonInstructions[1] = -frame.angle;
+			dock_state = 1;
 			return 0;
 		}
 	}
