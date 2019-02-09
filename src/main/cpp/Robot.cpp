@@ -83,7 +83,7 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { 0.045, 0.0000, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 
 public:
@@ -478,14 +478,14 @@ public:
 		if(!pidAngle.IsEnabled()) {
 			pidAngle.Enable();
 		}
-		/*
-		if(pidAngle.GetError() > 180){
-			pidAngle.SetSetpoint(pidAngle.GetSetpoint()-360);
-		}
 		
-		if(pidAngle.GetError() < -180){
-			pidAngle.SetSetpoint(pidAngle.GetSetpoint()+360); 
-		}*/
+		if(degrees > 180){
+		degrees -= 360;
+		}
+
+		if(degrees < -180){
+		degrees += 360;
+		}
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
