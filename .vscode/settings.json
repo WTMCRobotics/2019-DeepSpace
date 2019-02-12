@@ -59,7 +59,9 @@
     "iomanip": "cpp",
     "optional": "cpp",
     "string_view": "cpp",
-    "*.inc": "cpp"
+    "*.inc": "cpp",
+    "complex": "cpp",
+    "list": "cpp"
   },
   "C_Cpp.default.configurationProvider": "vscode-wpilib"
 }

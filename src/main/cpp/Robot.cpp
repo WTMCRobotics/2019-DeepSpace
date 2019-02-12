@@ -52,10 +52,13 @@ private:
 	double leftTrigger;//not used yet
 	bool rightShoulder;//not used yet
 	bool leftShoulder;
+	bool dpadUp;
+	bool dpadDown;
 
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
+	bool runDockRobot = false;
 
 	//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
 	float customGyroOfset = 0;
@@ -92,6 +95,13 @@ public:
 
 	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
 
+	// Adds two numbers together and overflows to a minimum if it goes over a maximum.
+	// Ex: addWithMax(2, 5, 3) = 1
+	double addWithMax(double add1, double add2, double max, double min = 0.0) {
+		if (add1 + add2 >= max) return ((add1 + add2) - max * floor((add1 + add2) / max)) + min;
+		else return add1 + add2;
+	}
+
 	//this gets called once at the beggining of the match
 	void RobotInit() {
 		SetupMoters();
@@ -99,6 +109,7 @@ public:
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 		serial_port.SetTimeout(.05);
+		serial_port.Reset();
 	}
 
 	//configures the motors should be called at begining of match
@@ -214,7 +225,7 @@ public:
 
 	//this code gets call once every tick or about 50 times per second
 	void TeleopPeriodic() {
-		if(waiting == true){
+		if(!waiting){
 			Drive();
 			//cout << DriveDistance(6 * 3.14, 1) << endl;
 			//DriveDistance(1, 1);
@@ -226,51 +237,63 @@ public:
 
 	//this gets called every tick and contans all the drivetrain related code
 	void Drive() {
-		if(waiting == true){
-		UpdateControllerInputs();
-		UpdateRaspiInput();
+		if(!waiting){
+			UpdateControllerInputs();
+			UpdateRaspiInput();
+			//cout << pGyro->GetYaw() << endl;
+			if(leftShoulder) {
+				isAuton=true;	
+			} else {
+				isAuton=false;
+			}
+			if (runDockRobot == false) dock_state = 0;
 
-		if(leftShoulder) {
-			isAuton=true;	
-		} else {
-			isAuton=false;
-		}
-
-		if(isAuton) {
-			//gets of hab if on hab
-			//if(!isOffHab) {
-			//	GetOffHab();
-			//} else {
-				//this code will run once off hab
-				FollowAutonInstructions();
-			//}
+			if(isAuton) {
+				gets of hab if on hab
+				if(!isOffHab) {
+					GetOffHab();
+				} else {
+					//this code will run once off hab
+					FollowAutonInstructions();
+				}
+				
+				
 			
-			
-		
-		}
-		else {
-			//this will be a number between 0.25 and 1.0
-			pidAngle.Disable();
-			double amountToSlowBy = (1- (rightTrigger * 0.5)) * (1- (leftTrigger * 0.5));
+			} else if (runDockRobot) {
+				/*int dockRobotRetval = DockRobot();
+				if (dockRobotRetval == -1) {
+					cout << "Error: Vision not responding!\n";
+					runDockRobot = false;
+					dock_state = 0;
+				} else if (dockRobotRetval == 1) {
+					cout << "Finished docking.\n";
+					runDockRobot = false;
+					dock_state = 0;
+				}*/
 
-			leftTarget = leftjoyY * amountToSlowBy;
-			rightTarget = rightjoyY * amountToSlowBy;
-			
-			//Set the motors to the motor targets
-			leftLeader.Set(ControlMode::PercentOutput, leftTarget);
-			rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
+			} else {
+				//this will be a number between 0.25 and 1.0
+				pidAngle.Disable();
+				double amountToSlowBy = (1- (rightTrigger * 0.5)) * (1- (leftTrigger * 0.5));
 
-			//gets things ready for when auton is enabled
-			ResetEncoders();	
-			ResetGyro();
+				leftTarget = leftjoyY * amountToSlowBy;
+				rightTarget = rightjoyY * amountToSlowBy;
+				
+				//Set the motors to the motor targets
+				leftLeader.Set(ControlMode::PercentOutput, leftTarget);
+				rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
-			//this hardcodes the program to move 2 feet forward then turn 180 degrese
-			//autonInstructions[1] = 0;
-			//autonInstructions[2] = 12;
-			autonInstructions[3] = 90;
-			//autonInstructions[4] = 2 * 12;			
-			
-		}
+				//gets things ready for when auton is enabled
+				ResetEncoders();	
+				ResetGyro();
+
+				//this hardcodes the program to move 2 feet forward then turn 90 degrese
+				autonInstructions[1] = 90;
+				autonInstructions[0] = 24;
+				//autonInstructions[3] = 90;
+				//autonInstructions[4] = 2 * 12;			
+				
+			}
 		}
 	}
 
@@ -284,6 +307,12 @@ public:
 		
 		//Auton overide
 		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
+		runDockRobot = xboxController.GetBumper(frc::GenericHID::JoystickHand::kRightHand);
+		if (!dpadUp && xboxController.GetAButton()) incrementThreshold(serial_port);
+		if (!dpadDown && xboxController.GetBButton()) decrementThreshold(serial_port);
+		dpadUp = xboxController.GetAButton();
+		dpadDown = xboxController.GetBButton();
+		if (xboxController.GetYButton()) serial_port.Reset();
 
 
 		/*#ifdef FINEMOTIONCONTROL
@@ -304,20 +333,26 @@ public:
 
 	//gets inputs from raspi
 	void UpdateRaspiInput() {
-		/*frame = getFrame(serial_port);
+		if (serial_port.StatusIsFatal()) {
+			cout << "Cannot use serial port!\n";
+			missed_frames = 255;
+			return;
+		}
+		frame = getFrame(serial_port);
 		if (frame.error) {
-			if (frame.error & VISION_ERROR_NO_DATA) missed_frames++;
+			//cout << "Error getting frame: " << getVisionError(frame) << "\n";
+			missed_frames++;
 			return;
 		}
 		if (frameIsInfo(frame)) {
 			vision_info_t vinfo = getInfo(frame);
 			vision_threshold = (uint8_t)vinfo.threshold;
-			//cout << "Threshold now " << vision_threshold << "\n";
+			cout << "Threshold now " << vision_threshold << "\n";
 		} else {
-			//cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.reserved_distance << "\n";
+			if (abs(frame.line_offset) < 25) cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.wall_distance << "\n";
 		}
 		last_frame_time = time_clock.now();
-		missed_frames = 0;*/
+		missed_frames = 0;
 	}
 
 	//call this every tick to get off the hab
@@ -332,11 +367,23 @@ public:
 		}
 	}
 
+	//call this every tick to get off the hab
+	bool sandStormAuton() {
+		//returns true when done
+		if(DriveDistance(36,0.1)) {
+			ResetEncoders();
+			isOffHab = true; 
+			return true;
+		} else {
+			return false;
+		}
+	}
+
 	//folows instructions in autonInstructions[]
 	//TODO
 	bool FollowAutonInstructions() {
 		//returns true if done
-		cout << autonInstructions[1] << " , " << autonInstructions[2] << " , " << autonInstructions[3] << " , " << autonInstructions[4] << endl;
+		//cout << autonInstructions[1] << " , " << autonInstructions[2] << " , " << autonInstructions[3] << " , " << autonInstructions[4] << endl;
 		//cout << "following auton" << " , ";
 		int currentInstrusction = Constant::MAX_AUTON_INSTRUCTIONS -1;
 		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
@@ -345,18 +392,18 @@ public:
 		//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
 		if((currentInstrusction % 2) == 0){
 			//distance
-			cout << "driving distance" << endl;
-			if(DriveDistance(autonInstructions[currentInstrusction], 1)) {
-				cout << "distance driven" << endl;
+			//cout << "driving distance" << endl;
+			if(DriveDistance(autonInstructions[currentInstrusction], 0.25)) {
+				//cout << "distance driven" << endl;
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
 				ResetGyro();
 			}
 		} else {
 			//angle
-			cout << "turning angle" << endl;
+			//cout << "turning angle" << endl;
 			if(TurnDegrees(autonInstructions[currentInstrusction])) {
-				cout << "angle turned" << endl;
+				//cout << "angle turned" << endl;
 				autonInstructions[currentInstrusction] = 0;
 				ResetEncoders();
 				ResetGyro();
@@ -472,7 +519,7 @@ public:
 	bool TurnDegrees(double degrees) {
 		//returns true when done
 		if(degrees == 0){
-		return true;
+			return true;
 		}
 		
 		if(!pidAngle.IsEnabled()) {
@@ -480,18 +527,20 @@ public:
 		}
 		
 		if(degrees > 180){
-		degrees -= 360;
+			degrees -= 360;
 		}
 
 		if(degrees < -180){
-		degrees += 360;
+			degrees += 360;
 		}
 
 		if(pidAngle.GetSetpoint() != degrees) {
 			pidAngle.SetSetpoint(degrees);
+			//pidAngle.SetSetpoint(300);
 		}
 
-		cout << pidAngle.GetError() << endl;
+		cout << "GetSetpoint: " << pidAngle.GetSetpoint() << endl;
+		cout << "customGyroOfset: " << customGyroOfset << endl;
 
 		if(pidAngle.IsEnabled() && abs(pidAngle.GetError()) < AllowedAngleError ) {
 			pidAngle.Disable();
@@ -504,7 +553,8 @@ public:
 	//set the current gyro angle to 0 simalar to ResetEncoders()
 	void ResetGyro() {
 		//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
-		customGyroOfset = -1 * pGyro->GetYaw();
+		//customGyroOfset = pGyro->GetYaw();
+		CalibrateGyro();
 	}
 
 	// use this instead of pGyro->GetYaw()
@@ -516,13 +566,16 @@ public:
 	// may make code hang for a little bit
 	void CalibrateGyro() {
 		pGyro->ZeroYaw();
-		while(!(pGyro->GetYaw() < 0.01 && pGyro->GetYaw() > -.01)) {
-			cout << "calibrating gyro" << endl;
-			waiting = false;
-		}
-		cout << "gyro caibrated" << endl;
-		waiting = true;
-		ResetGyro();
+		// while(!(pGyro->GetYaw() < 1 && pGyro->GetYaw() > -1)) {
+
+		// 	cout << pGyro->GetYaw() << endl;
+		// 	waiting = true;
+		// }
+		// if(pGyro->GetYaw() < 1 && pGyro->GetYaw() > -1) {
+		// 	cout << "gyro caibrated" << endl;
+		// 	waiting = false;
+		// 	ResetGyro();
+		// }
 	}
 
 	//call every tick to climb hab
@@ -555,7 +608,7 @@ public:
 	bool IsLineApproachable() {
 		if (chrono::duration_cast<chrono::milliseconds>(time_clock.now() - last_frame_time).count() > 35) // old frame is outdated
 			UpdateRaspiInput();
-		return (abs(frame.angle) < 1 && abs(frame.line_offset) < 2.5 &&      // thresholds
+		return (abs(frame.angle) < 10 && abs(frame.line_offset) < 2.5 &&      // thresholds
 		        frame.angle != 0 && frame.line_offset != 0 && !frame.error && IsVisionAvailable()); // check for problems
 	}
 
@@ -570,9 +623,12 @@ public:
 			return 0;
 		}
 		if (IsLineApproachable()) {
+			cout << "Line is approachable.\n";
 			if (frame.wall_distance > 3 && !(frame.error & VISION_ERROR_BAD_DISTANCE)) {
 				ClearAutonInstructions();
-				autonInstructions[0] = frame.wall_distance / (4 * 2.54);
+				autonInstructions[0] = (frame.wall_distance / (4 * 2.54)) + 2.0;
+				cout << "Instructions:\n";
+				cout << "\tMoving forward " << autonInstructions[0] << " inches.\n";
 				dock_state = 1;
 				return 0;
 			}
@@ -581,8 +637,12 @@ public:
 			ClearAutonInstructions();
 			autonInstructions[3] = (90 - frame.angle) * (frame.line_offset < 0 ? 1 : -1);
 			autonInstructions[2] = frame.line_offset / 2.54;
-			autonInstructions[1] = 90 * (frame.line_offset < 0 ? 1 : -1);
+			autonInstructions[1] = -90 * (frame.line_offset < 0 ? 1 : -1);
 			autonInstructions[0] = 0;
+			cout << "Instructions:\n";
+			cout << "\tRotating " << autonInstructions[3] << " degrees.\n";
+			cout << "\tMoving forward " << autonInstructions[2] << " inches.\n";
+			cout << "\tRotating " << autonInstructions[1] << " degrees.\n";
 			dock_state = 1;
 			return 0;
 		} else if (frame.error) {
@@ -590,6 +650,8 @@ public:
 		} else {
 			ClearAutonInstructions();
 			autonInstructions[1] = -frame.angle;
+			cout << "Instructions:\n";
+			cout << "\tRotating " << autonInstructions[1] << " degrees.\n";
 			dock_state = 1;
 			return 0;
 		}
