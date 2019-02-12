@@ -279,28 +279,28 @@ public:
 			}
 
 			if(gbutton2){
-				autonInstructions[1] = 54
+				autonInstructions[1] = 54;
 				autonInstructions[2] = 20.85 * 12;
 				autonInstructions[3] = -154;
 				autonInstructions[4] = -4 * 12;
 			}
 
 			if(gbutton3){
-				autonInstructions[1] = 66
+				autonInstructions[1] = 66;
 				autonInstructions[2] = 22.37 * 12;
 				autonInstructions[3] = -156;
 				autonInstructions[4] = -4 * 12;
 			}
 
 			if(gbutton4){
-				autonInstructions[1] = 68
+				autonInstructions[1] = 68;
 				autonInstructions[2] = 24 * 12;
 				autonInstructions[3] = -158;
 				autonInstructions[4] = -4 * 12;
 			}
 
 			if(gbutton5){
-				autonInstructions[1] = 76
+				autonInstructions[1] = 76;
 				autonInstructions[2] = 19.34 * 12;
 				autonInstructions[3] = -166;
 				autonInstructions[4] = -4 * 12;
