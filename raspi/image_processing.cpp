@@ -275,9 +275,11 @@ extern void initTime();
 extern double getTime();
 
 void outputImage(Mat cdst, bool success) {
-    std::vector<uchar> buf;
-    imencode(".jpg", cdst, buf);
-    std::cout << std::string((char*)&buf[0], buf.size());
+    std::cerr << "Outputting...\n";
+    //std::vector<uchar> buf;
+    //imencode(".raw", cdst, buf);
+    //std::cout << std::string((char*)&buf[0], buf.size());
+    ::write(1, cdst.data, cdst.dataend - cdst.datastart);
     #ifndef SILENT
     if (success) {
         std::cerr << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
@@ -296,6 +298,65 @@ void getResults(int signal) {
     avg /= times.size();
     std::cerr << "Average time = " << avg << " ms\n";
     exit(0);
+}
+
+int getRectCount(VideoCapture capture) {
+    Mat frame, cdst(Size(640, 480*2), CV_8UC3), edges;
+    #ifdef CUDA
+    cv::gpu::GpuMat gpuframe, bw, gpuedges;
+    #else
+    Mat bw;
+    #endif
+    capture >> frame;
+    if(frame.empty()) {
+        std::cerr << "Failed to capture an image.\n";
+        return 0;
+    }
+    if (verbose) frame.copyTo(cdst(Rect(0, 480, 640, 480)));
+    // Get min/max values
+    double min = 0, max = 0;
+    #ifdef CUDA
+    gpuframe.upload(frame);
+    cv::gpu::cvtColor(gpuframe, bw, CV_BGR2GRAY);
+    cv::gpu::minMaxLoc(bw, &min, &max);
+    #else
+    cvtColor(frame, bw, CV_BGR2GRAY);
+    minMaxLoc(bw, &min, &max);
+    #endif
+    //std::cerr << "min = " << (int)min << ", max = " << (int)max << "\n";
+    uchar thresh = ((max - min) * (pixel_threshold / 256.0)) + min;
+    // Convert to B/W image
+    #ifdef CUDA
+    cv::gpu::threshold(bw, gpuedges, (double)thresh, 255.0, THRESH_BINARY);
+    gpuedges.download(edges);
+    #else
+    threshold(bw, edges, (double)thresh, 255.0, THRESH_BINARY);
+    #endif
+    if (verbose) {
+        Mat edgesrgb;
+        cvtColor(edges, edgesrgb, CV_GRAY2BGR);
+        edgesrgb.copyTo(cdst(Rect(0, 0, 640, 480)));
+    }
+    // extract contours
+    std::vector<std::vector<cv::Point> > contours;
+    cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+    return contours.size();
+}
+
+void calibrateVision(VideoCapture capture) {
+    std::cerr << "Calibrating...\n";
+    for (int c = getRectCount(capture); c != 1; c = getRectCount(capture)) {
+        if (c == 0) pixel_threshold++;
+        else pixel_threshold--;
+    }
+    std::cerr << "Done.\n";
+    uint32_t frames[4];
+    frames[0] = VISION_INFO;
+    ((float*)(frames))[1] = (float)pixel_threshold;
+    for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
+    uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
+    ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+    ::write(serout, frames, 16);
 }
 
 int main(int argc, const char * argv[]) {
@@ -348,7 +409,7 @@ int main(int argc, const char * argv[]) {
         capture >> frame;
         if(frame.empty()) {
             std::cerr << "Failed to capture an image.\n";
-            goto ErrorLine;
+            continue;
         }
         {
         char c = 0;
@@ -370,6 +431,8 @@ int main(int argc, const char * argv[]) {
                 ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
                 ::write(serout, frames, 16);
                 frames[0] = VISION_HEADER;
+            } else if (c == 'c') {
+                calibrateVision(capture);
             }
         }
         if (verbose) frame.copyTo(cdst(Rect(0, 480, 640, 480)));
@@ -476,7 +539,7 @@ ErrorLine:
         ::write(serout, frames, 16);
 
         // output final image
-        outputImage(frame, success);
+        outputImage(edges, success);
     }
     return 0;
 }
