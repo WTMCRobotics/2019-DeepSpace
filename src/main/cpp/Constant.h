@@ -20,6 +20,11 @@ public:
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;
 
+	static const int IntakeLeaderID = 31;
+	static const int IntakeFollowerID = 32;
+
+	static const int ArmLeaderID = 41;
+
 	static constexpr double pulsesPerRotationQuad = 8192;
 	static constexpr double circumference = 6 * 3.14;
 

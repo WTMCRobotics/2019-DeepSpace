@@ -40,12 +40,19 @@ private:
 	
 
 	XboxController xboxController{0};
+	XboxController guitar{1};
+
+	Joystick joystick{2};
 	//Joystick joystick2, joystick2;
 	double leftjoyY;
 	double rightjoyY;
 	double rightjoyX;
 	double leftTarget;
 	double rightTarget;
+
+	double codriverY;
+	double armTarget;
+	double intake;
 
 	//triggers
 	double rightTrigger;//not used yet
@@ -55,10 +62,19 @@ private:
 	bool dpadUp;
 	bool dpadDown;
 
+	bool gbutton1;
+	bool gbutton2;
+	bool gbutton3;
+	bool gbutton4;
+	bool gbutton5;
+	bool gbutton6;
+
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
 	bool runDockRobot = false;
+	bool FollowingInstructions = false;
+	bool ShouldFollowInstructions = false;
 
 	//  customGyroOfset + GetGyroYaw() = pGyro->GetYaw()
 	float customGyroOfset = 0;
@@ -77,6 +93,11 @@ private:
 	TalonSRX leftFollower {Constant::LeftFollowerID};
 	TalonSRX rightLeader {Constant::RightLeaderID};
 	TalonSRX rightFollower {Constant::RightFollowerID};
+
+	TalonSRX intakeLeader {Constant::IntakeLeaderID};
+	TalonSRX intakeFollower {Constant::IntakeFollowerID};
+
+	TalonSRX armLeader {Constant::ArmLeaderID};
 	
 	uint8_t vision_threshold;
 	chrono::steady_clock time_clock;
@@ -175,6 +196,42 @@ public:
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
 
+		intakeLeader.ClearStickyFaults(0);
+		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		intakeLeader.ConfigNominalOutputForward(0, 0);
+		intakeLeader.ConfigNominalOutputReverse(0, 0);
+		intakeLeader.ConfigPeakOutputForward(1, 0);
+		intakeLeader.ConfigPeakOutputReverse(-1, 0);
+		intakeLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		intakeLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		intakeLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		intakeLeader.SetSensorPhase(false);
+		intakeLeader.SetInverted(false);
+
+		intakeFollower.ConfigNominalOutputForward(0, 0);
+		intakeFollower.ConfigNominalOutputReverse(0, 0);
+		intakeFollower.ConfigPeakOutputForward(1, 0);
+		intakeFollower.ConfigPeakOutputReverse(-1, 0);
+		intakeFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		intakeFollower.ConfigMotionCruiseVelocity(0, 0);
+		intakeFollower.ConfigMotionAcceleration(0, 0);
+		intakeFollower.SetSensorPhase(false);
+		intakeFollower.SetInverted(false);
+
+		intakeFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::IntakeLeaderID);
+
+		armLeader.ClearStickyFaults(0);
+		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		armLeader.ConfigNominalOutputForward(0, 0);
+		armLeader.ConfigNominalOutputReverse(0, 0);
+		armLeader.ConfigPeakOutputForward(1, 0);
+		armLeader.ConfigPeakOutputReverse(-1, 0);
+		armLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		armLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		armLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		armLeader.SetSensorPhase(false);
+		armLeader.SetInverted(false);
+
 	}
 
 	/*
@@ -242,20 +299,26 @@ public:
 			UpdateRaspiInput();
 			//cout << pGyro->GetYaw() << endl;
 			if(leftShoulder) {
-				isAuton=true;	
+				isAuton=true;
 			} else {
 				isAuton=false;
 			}
 			if (runDockRobot == false) dock_state = 0;
 
 			if(isAuton) {
-				gets of hab if on hab
+				/*//gets of hab if on hab
 				if(!isOffHab) {
 					GetOffHab();
 				} else {
 					//this code will run once off hab
-					FollowAutonInstructions();
-				}
+					ApproachLine(0);
+					if (ShouldFollowInstructions) {
+						if(FollowAutonInstructions()) {
+							ShouldFollowInstructions = false;
+						}
+					}
+				}*/
+				DriveDistance(24, 0.5);
 				
 				
 			
@@ -271,28 +334,87 @@ public:
 					dock_state = 0;
 				}*/
 
-			} else {
+			} else {	
 				//this will be a number between 0.25 and 1.0
 				pidAngle.Disable();
 				double amountToSlowBy = (1- (rightTrigger * 0.5)) * (1- (leftTrigger * 0.5));
 
 				leftTarget = leftjoyY * amountToSlowBy;
 				rightTarget = rightjoyY * amountToSlowBy;
+
+				
 				
 				//Set the motors to the motor targets
 				leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 				rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
 
+				intakeLeader.Set(ControlMode::PercentOutput, intake);
+
+				armLeader.Set(ControlMode::PercentOutput, codriverY / 3);
+
 				//gets things ready for when auton is enabled
 				ResetEncoders();	
 				ResetGyro();
 
-				//this hardcodes the program to move 2 feet forward then turn 90 degrese
-				autonInstructions[1] = 90;
-				autonInstructions[0] = 24;
-				//autonInstructions[3] = 90;
-				//autonInstructions[4] = 2 * 12;			
+				/*
+				*autonInstructions[0] = 0;
+				*autonInstructions[1] = 90;
+				*autonInstructions[2] = 48;
+				*autonInstructions[3] = 90;
+				*/
+
+				//Cargo Hatch Close-Front
+				if(gbutton1){
 				
+					autonInstructions[2] = 18 * 12;
+					autonInstructions[3] = -149;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
+
+				//Cargo Hatch Close-Side
+				if(gbutton2){
+					autonInstructions[1] = 54;
+					autonInstructions[2] = 20.85 * 12;
+					autonInstructions[3] = -154;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
+
+				//Cargo Hatch Middle-Side
+				if(gbutton3){
+					autonInstructions[1] = 66;
+					autonInstructions[2] = 22.37 * 12;
+					autonInstructions[3] = -156;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
+
+				//Cargo Hatch Far-Side
+				if(gbutton4){
+					autonInstructions[1] = 68;
+					autonInstructions[2] = 24 * 12;
+					autonInstructions[3] = -158;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
+
+				//Rocket Hatch Far
+				if(gbutton5){
+					autonInstructions[1] = 76;
+					autonInstructions[2] = 19.34 * 12;
+					autonInstructions[3] = -166;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
+
+				//Rocket Hatch Close
+				if(gbutton6){
+					autonInstructions[2] = 13 * 12;
+					autonInstructions[3] = 180;
+					autonInstructions[4] = -4 * 12;
+					ShouldFollowInstructions = true;
+				}
 			}
 		}
 	}
@@ -305,6 +427,10 @@ public:
 		leftTrigger = xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand);
 		rightTrigger = xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand);
 		
+		//CoDriver inputs
+		codriverY = joystick.GetY();
+		intake = joystick.GetPOV();
+
 		//Auton overide
 		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
 		runDockRobot = xboxController.GetBumper(frc::GenericHID::JoystickHand::kRightHand);
@@ -367,18 +493,6 @@ public:
 		}
 	}
 
-	//call this every tick to get off the hab
-	bool sandStormAuton() {
-		//returns true when done
-		if(DriveDistance(36,0.1)) {
-			ResetEncoders();
-			isOffHab = true; 
-			return true;
-		} else {
-			return false;
-		}
-	}
-
 	//folows instructions in autonInstructions[]
 	//TODO
 	bool FollowAutonInstructions() {
@@ -389,29 +503,38 @@ public:
 		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
 			currentInstrusction--;
 		}
-		//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
-		if((currentInstrusction % 2) == 0){
-			//distance
-			//cout << "driving distance" << endl;
-			if(DriveDistance(autonInstructions[currentInstrusction], 0.25)) {
-				//cout << "distance driven" << endl;
-				autonInstructions[currentInstrusction] = 0;
-				ResetEncoders();
-				ResetGyro();
+
+		if(!FollowingInstructions) {
+			
+			//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
+			if((currentInstrusction % 2) == 0){
+				//distance
+				//cout << "driving distance" << endl;
+				if(DriveDistance(autonInstructions[currentInstrusction], 0.25)) {
+					//cout << "distance driven" << endl;
+					autonInstructions[currentInstrusction] = 0;
+					ResetEncoders();
+					ResetGyro();
+				}
+			} else {
+				//angle
+				//cout << "turning angle" << endl;
+				if(TurnDegrees(autonInstructions[currentInstrusction])) {
+					//cout << "angle turned" << endl;
+					autonInstructions[currentInstrusction] = 0;
+					ResetEncoders();
+					ResetGyro();
+				}
+			
 			}
-		} else {
-			//angle
-			//cout << "turning angle" << endl;
-			if(TurnDegrees(autonInstructions[currentInstrusction])) {
-				//cout << "angle turned" << endl;
-				autonInstructions[currentInstrusction] = 0;
-				ResetEncoders();
-				ResetGyro();
-			}
-		
 		}
 		//returns true if the last step is completed
-		return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1);
+	return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1);
+	FollowingInstructions = true;
+
+		//if(autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1){
+		//	DockRobot();
+		//}
 	}
 
 	//clears all instructions in autonInstructions[]
@@ -477,9 +600,11 @@ public:
 
 	//call this once per tick to dive "targetDistance" inches away from the end of the line
 	//TODO
-	bool ApproachLine(float targetDistance) {
+	bool 
+	ApproachLine(float targetDistance) {
 		//returns true when done
 		CalculateAutonInstructions();
+		FollowAutonInstructions();
 		return false; // unimplemented
 	}
 
@@ -490,8 +615,8 @@ public:
 
 		float outPut [Constant::MAX_AUTON_INSTRUCTIONS] = {}; //autonInstructions will be set to this if successful
 
-		float x;
-		float y;
+		float x = 1;
+		float y = 10;
 		float targetAngle = (float)atan(y / x) * 180 / PI;
 		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR) {
 			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
@@ -697,7 +822,12 @@ public:
 	//spins weels to shot out cargo
 	//TODO
 	void EjectCargo(){
-
+		for (int i = 0; i < 1000; i++) {
+			armLeader.Set(ControlMode::PercentOutput, 1);
+		}
+		
+		armLeader.Set(ControlMode::PercentOutput, 0);
+		
 	}
 };
 
