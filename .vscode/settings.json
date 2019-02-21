@@ -63,5 +63,6 @@
     "complex": "cpp",
     "list": "cpp"
   },
-  "C_Cpp.default.configurationProvider": "vscode-wpilib"
+  "C_Cpp.default.configurationProvider": "vscode-wpilib",
+  "C_Cpp.default.includePath": ["C:\\Users\\WTMCRobotics\\wpilib\\cpp\\current\\include", "C:\\Users\\WTMCRobotics\\wpilib\\user\\cpp\\include", "C:\\frc\\usr\\include", "C:\\frc\\arm-frc-linux-gnueabi\\include\\c++\\5.5.0", "C:\\frc\\arm-frc-linux-gnueabi\\include\\c++\\5.5.0\\arm-frc-linux-gnueabi", "C:\\frc\\usr\\include\\linux", "build\\tmp\\expandedArchives\\wpilibc-cpp-2019.2.1-headers.zip_c5f7002a6c1dfda8aa2899e2594d01fe", "build\\tmp\\expandedArchives\\cameraserver-cpp-2019.2.1-headers.zip_6d5c4a8bf55973d76d90eeb158bc5c66", "build\\tmp\\expandedArchives\\wpiutil-cpp-2019.2.1-headers.zip_961601eb64e5456d71ed70c0f9da8e94", "build\\tmp\\expandedArchives\\hal-cpp-2019.2.1-sources.zip_9dcb46c9ade4c7c133c75a9dc6ab4149", "build\\tmp\\expandedArchives\\hal-cpp-2019.2.1-headers.zip_c1e3733a98824778ae9dc4369a7c5066", "C:\\frc\\lib\\gcc\\arm-frc-linux-gnueabi\\5.5.0\\include"]
 }

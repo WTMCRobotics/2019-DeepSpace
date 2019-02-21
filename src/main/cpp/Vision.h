@@ -1,6 +1,14 @@
 // Vision reciever library
 #define VISION_HEADER (0xEDFE0161)
 #define VISION_INFO (0x7ADA0161)
+#ifdef __GNUC__
+#define DEPRECATED(func) func __attribute__ ((deprecated))
+#elif defined(_MSC_VER)
+#define DEPRECATED(func) __declspec(deprecated) func
+#else
+#pragma message("WARNING: You need to implement DEPRECATED for this compiler")
+#define DEPRECATED(func) func
+#endif
 #include <cstdint>
 #include <string>
 #include <frc/SerialPort.h>
@@ -19,8 +27,9 @@ enum vision_error {
 typedef struct {
     uint32_t header;
     float angle;
-    float line_offset;
-    int16_t wall_distance;
+    int16_t line_offset;
+    int16_t line_offset_y;
+    uint16_t wall_distance;
     uint16_t checksum;
     uint8_t error;
 } vision_frame_t;
@@ -55,3 +64,9 @@ extern vision_info_t decrementThreshold(frc::SerialPort &serial);
 
 // Returns a string with a description of the error.
 extern std::string getVisionError(vision_frame_t frame);
+
+// Switches the camera output to the next camera.
+#define nextCamera(serial) serial.Write("n", 1)
+
+// Calibrates the vision threshold.
+DEPRECATED(extern vision_info_t calibrateVision(frc::SerialPort &serial));

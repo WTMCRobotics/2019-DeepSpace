@@ -49,13 +49,13 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
             //std::cout << (int)((char*)&frame)[i] << " ";
         }
         if (frame.header != VISION_HEADER && frame.header != VISION_INFO) frame.error |= VISION_ERROR_BAD_HEADER;  
-        if (frame.angle == 0 || frame.line_offset == 0) frame.error |= VISION_ERROR_BAD_RECT;
-        if (frame.wall_distance == -1 || frame.wall_distance == 0) frame.error |= VISION_ERROR_BAD_DISTANCE;
+        if (frame.angle == 0 || frame.line_offset == 0 || frame.line_offset_y == 0) frame.error |= VISION_ERROR_BAD_RECT;
+        if (frame.wall_distance > 325 || frame.wall_distance == 0) frame.error |= VISION_ERROR_BAD_DISTANCE;
         uint16_t * frames16 = (uint16_t*)&frame;
         //std::cout << "\n";
         //for (int i = 0; i < 8; i++) std::cout << frames16[i] << " ";
         if (frames16[0] != 0x6101 && frames16[0] != 0x0161) frame.error |= VISION_ERROR_BROKEN;
-        uint32_t subsum = frames16[0] + frames16[1] + frames16[2] + frames16[3] + 
+        uint32_t subsum = frames16[0] + frames16[1] + frames16[2] + frames16[3] +
                           frames16[4] + frames16[5] + frames16[6] + frames16[7];
         uint16_t sum = ~((uint16_t)(subsum & 0xFFFF) + (uint16_t)(subsum >> 16));
         //std::cout << "\n" << subsum << " " << sum;
@@ -95,4 +95,12 @@ std::string getVisionError(vision_frame_t frame) {
     if (frame.error & VISION_ERROR_BAD_CHECKSUM) retval += ", Bad checksum";
     if (frame.error & VISION_ERROR_BROKEN) retval += ", Invalid error (this should never occur)";
     return retval.substr(2);
+}
+
+vision_info_t calibrateVision(frc::SerialPort &serial) {
+    serial.Write("c", 1);
+    while (true) {
+        vision_frame_t frame = getFrame(serial);
+        if (frameIsInfo(frame)) return getInfo(frame);
+    }
 }

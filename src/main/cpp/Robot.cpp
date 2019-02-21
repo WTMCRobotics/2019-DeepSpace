@@ -1,8 +1,11 @@
 #include <iostream>
+#include <istream>
 #include <string>
 #include <chrono>
 
 #include <frc/WPILib.h>
+
+#include <frc/DigitalInput.h>
 
 #include <frc/liveWindow/LiveWindow.h>
 #include <frc/smartDashboard/SendableChooser.h>
@@ -21,10 +24,24 @@
 #include "PIDGyroSource.h"
 #include <frc/PIDController.h>
 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <unistd.h> 
+#include <string.h> 
+#include <sys/types.h> 
+#include <sys/socket.h> 
+#include <arpa/inet.h> 
+#include <netinet/in.h>
+#include <opencv2/core/core.hpp>
+#define PORT     3805
+#define MAXLINE 1024 
+
 #include <math.h>
 #define PI 3.14159265
+#define rad(d) (d * (M_PI/180.0))
 
 #include "Vision.h"
+#include "server.h"
 
 using namespace frc;
 using namespace std;
@@ -32,17 +49,17 @@ using namespace std;
 class Robot : public frc::TimedRobot {
 
 private:
-	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
+	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
 	frc::SendableChooser<string> m_chooser;
 	const string kAutoNameDefault = "Default";
 	const string kAutoNameCustom = "My Auto";
 	string m_autoSelected;
 	
 
-	XboxController xboxController{0};
-	XboxController guitar{1};
+	frc::XboxController xboxController{0};
+	frc::XboxController guitar{2};
 
-	Joystick joystick{2};
+	frc::Joystick joystick{1};
 	//Joystick joystick2, joystick2;
 	double leftjoyY;
 	double rightjoyY;
@@ -59,20 +76,37 @@ private:
 	double leftTrigger;//not used yet
 	bool rightShoulder;//not used yet
 	bool leftShoulder;
+	bool XButton;
 	bool dpadUp;
 	bool dpadDown;
+	bool nextCameraButton;
 
-	bool gbutton1;
-	bool gbutton2;
-	bool gbutton3;
-	bool gbutton4;
-	bool gbutton5;
-	bool gbutton6;
+	bool gbuttonGreen;
+	bool gbuttonRed;
+	bool gbuttonBlue;
+	bool gbuttonYellow;
+	bool gbuttonOrange;
+	bool gbuttonAltGreen;
+	bool gbuttonAltRed;
+	bool gbuttonAltBlue;
+	bool gbuttonAltYellow;
+	bool gbuttonAltOrange;
+	bool gbuttonDown;
+	bool gbuttonUp;
+
+	static const int GREEN = 1;
+	static const int RED = 2;
+	static const int YELLOW = 4;
+	static const int BLUE = 3;
+	static const int ORANGE = 5;
+	static const int AltColor = 9;
+
 
 	//Auton
 	bool isAuton = false;
 	bool isOffHab = false;
 	bool runDockRobot = false;
+	bool canRunDockRobot = true;
 	bool FollowingInstructions = false;
 	bool ShouldFollowInstructions = false;
 
@@ -87,7 +121,7 @@ private:
 	//raspi input
 	vision_frame_t frame;
 
-	AHRS* pGyro = new AHRS(SPI::Port::kMXP);
+	AHRS* pGyro = new AHRS(frc::SPI::Port::kMXP);
 
 	TalonSRX leftLeader {Constant::LeftLeaderID};
 	TalonSRX leftFollower {Constant::LeftFollowerID};
@@ -98,23 +132,29 @@ private:
 	TalonSRX intakeFollower {Constant::IntakeFollowerID};
 
 	TalonSRX armLeader {Constant::ArmLeaderID};
+
+	DigitalInput* lowerLimitSwitch;
+	DigitalInput* uperLimitSwitch;
 	
 	uint8_t vision_threshold;
 	chrono::steady_clock time_clock;
 	chrono::steady_clock::time_point last_frame_time;
 	unsigned int missed_frames = 0;
 
+	static bool cameraLoopStatus;
+
+	double wheelsTarget;
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
-
+	// PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidAngle { 0.035, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
 	float autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
 
 
-	SerialPort serial_port = SerialPort(9600, SerialPort::Port::kUSB);
+	frc::SerialPort serial_port = frc::SerialPort(9600, frc::SerialPort::Port::kUSB);
 
 	// Adds two numbers together and overflows to a minimum if it goes over a maximum.
 	// Ex: addWithMax(2, 5, 3) = 1
@@ -131,6 +171,34 @@ public:
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 		serial_port.SetTimeout(.05);
 		serial_port.Reset();
+		//std::thread cameraThread(CameraServerLoop);
+		//cameraThread.detach();
+		lowerLimitSwitch = new DigitalInput(0);
+		uperLimitSwitch = new DigitalInput(1);
+
+	}
+
+	static void CameraServerLoop() {
+		// Server side implementation of UDP client-server model  
+		std::stringstream buf;
+		char buffer[640*480*3];
+		char * argv[2] = {"udpserver", "3805"};
+		std::thread serverThread(serverMain, 2, argv, &buf);
+		serverThread.detach();
+		//std::cout << "Connected.\n";
+		cs::CvSource outputStreamStd = CameraServer::GetInstance()->PutVideo("Vision Camera", 640, 480);
+		
+		while (true) {
+			unsigned int len = 0;
+			long long n = 0; 
+			while (n < 640*480*3) {
+				n += buf.readsome(buffer, (n - 256 < 0 ? n - 256 : 256));
+				std::cout << "Recieved data\n";
+			} 
+			std::cout << "Got frame from pi\n";
+			cv::Mat image(cv::Size(640, 480), CV_8UC3, buffer, cv::Mat::AUTO_STEP);
+			outputStreamStd.PutFrame(image);
+		}
 	}
 
 	//configures the motors should be called at begining of match
@@ -181,16 +249,19 @@ public:
 		rightFollower.ConfigMotionAcceleration(0, 0);
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
-
+		
+		double p = 0.65;
+		double i = 0.0000;
+		double d = 0.484;
 		// PID setup for driving a distance
-		leftLeader.Config_kP(Constant::pidChannel, .69, 0);
-		leftLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
-		leftLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
+		leftLeader.Config_kP(Constant::pidChannel, p, 0);
+		leftLeader.Config_kI(Constant::pidChannel, i, 0);
+		leftLeader.Config_kD(Constant::pidChannel, d, 0);
 		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-		rightLeader.Config_kP(Constant::pidChannel, .69, 0);
-		rightLeader.Config_kI(Constant::pidChannel, 0.0000, 0);
-		rightLeader.Config_kD(Constant::pidChannel, 0.0484, 0);
+		rightLeader.Config_kP(Constant::pidChannel, p, 0);
+		rightLeader.Config_kI(Constant::pidChannel, i, 0);
+		rightLeader.Config_kD(Constant::pidChannel, d, 0);
 		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
@@ -218,7 +289,7 @@ public:
 		intakeFollower.SetSensorPhase(false);
 		intakeFollower.SetInverted(false);
 
-		intakeFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::IntakeLeaderID);
+		//intakeFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::IntakeLeaderID);
 
 		armLeader.ClearStickyFaults(0);
 		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
@@ -294,6 +365,9 @@ public:
 
 	//this gets called every tick and contans all the drivetrain related code
 	void Drive() {
+		cout << "encoder" << armLeader.GetSelectedSensorPosition() << endl;
+		cout << "dio lower: " << lowerLimitSwitch->Get() << endl;
+		cout << "dio upper: " << uperLimitSwitch->Get() << endl;
 		if(!waiting){
 			UpdateControllerInputs();
 			UpdateRaspiInput();
@@ -303,36 +377,41 @@ public:
 			} else {
 				isAuton=false;
 			}
-			if (runDockRobot == false) dock_state = 0;
+			if (runDockRobot == false) {
+				dock_state = 0;
+				dockRobot2Running = false;
+			}
+
+			if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
 
 			if(isAuton) {
-				/*//gets of hab if on hab
-				if(!isOffHab) {
+				//gets of hab if on hab
+				/*if(!isOffHab) {
 					GetOffHab();
-				} else {
+				} else*/ //{
 					//this code will run once off hab
-					ApproachLine(0);
-					if (ShouldFollowInstructions) {
-						if(FollowAutonInstructions()) {
-							ShouldFollowInstructions = false;
-						}
-					}
-				}*/
-				DriveDistance(24, 0.5);
+					// if (ShouldFollowInstructions) {
+					// 	if(FollowAutonInstructions()) {
+					// 		ShouldFollowInstructions = false;
+					// 	}
+					// }
+				//}
+				DriveDistance(26 * 2, 1);
+				
 				
 				
 			
-			} else if (runDockRobot) {
-				/*int dockRobotRetval = DockRobot();
+			} else if (runDockRobot && canRunDockRobot) {
+				int dockRobotRetval = DockRobot2();
 				if (dockRobotRetval == -1) {
 					cout << "Error: Vision not responding!\n";
-					runDockRobot = false;
+					canRunDockRobot = false;
 					dock_state = 0;
 				} else if (dockRobotRetval == 1) {
 					cout << "Finished docking.\n";
-					runDockRobot = false;
+					canRunDockRobot = false;
 					dock_state = 0;
-				}*/
+				}
 
 			} else {	
 				//this will be a number between 0.25 and 1.0
@@ -347,73 +426,153 @@ public:
 				//Set the motors to the motor targets
 				leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 				rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
+				cout << "Intake: " << intake << endl;
+				if(intake != -1) {
+					cout << "Intake setting" << endl;
+					intakeLeader.Set(ControlMode::PercentOutput, -wheelsTarget);
+					intakeFollower.Set(ControlMode::PercentOutput, -wheelsTarget);
+				} else {
+					cout << "STOP INTAKE" << endl;
+					intakeLeader.Set(ControlMode::PercentOutput, 0);
+					intakeFollower.Set(ControlMode::PercentOutput, 0);
+				
+				}
+				//intakeLeader.Set(ControlMode::PercentOutput, intake);
+				cout << "intake: " << intake << endl;
+				cout << "coDriverY: " << codriverY << endl;
 
-				intakeLeader.Set(ControlMode::PercentOutput, intake);
-
-				armLeader.Set(ControlMode::PercentOutput, codriverY / 3);
+				if(codriverY < 0) {
+					if(!lowerLimitSwitch->Get()) {
+						armLeader.Set(ControlMode::PercentOutput, codriverY * 0.1);
+					} else {
+						armLeader.Set(ControlMode::PercentOutput, 0);
+					}
+				} else {
+					if(!uperLimitSwitch->Get()){
+						armLeader.Set(ControlMode::PercentOutput, codriverY * 0.5);
+					} else {
+						armLeader.Set(ControlMode::PercentOutput, 0);
+					}
+				}
 
 				//gets things ready for when auton is enabled
 				ResetEncoders();	
 				ResetGyro();
 
-				/*
-				*autonInstructions[0] = 0;
-				*autonInstructions[1] = 90;
-				*autonInstructions[2] = 48;
-				*autonInstructions[3] = 90;
-				*/
-
-				//Cargo Hatch Close-Front
-				if(gbutton1){
 				
-					autonInstructions[2] = 18 * 12;
-					autonInstructions[3] = -149;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
-				}
+				// autonInstructions[0] = 0;
+				//autonInstructions[1] = -90;
+				// autonInstructions[2] = 48;
+				// autonInstructions[3] = 90;
+				// ShouldFollowInstructions = true;
+				 
+				
+				if(gbuttonUp) {
+					//Cargo Hatch Close-Front
+					if(gbuttonOrange){
+					
+						autonInstructions[2] = 18 * 12;
+						autonInstructions[3] = -149;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 
-				//Cargo Hatch Close-Side
-				if(gbutton2){
-					autonInstructions[1] = 54;
-					autonInstructions[2] = 20.85 * 12;
-					autonInstructions[3] = -154;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
-				}
+					//Cargo Hatch Close-Side
+					if(gbuttonYellow){
+						autonInstructions[1] = 54;
+						autonInstructions[2] = 20.85 * 12;
+						autonInstructions[3] = -154;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 
-				//Cargo Hatch Middle-Side
-				if(gbutton3){
-					autonInstructions[1] = 66;
-					autonInstructions[2] = 22.37 * 12;
-					autonInstructions[3] = -156;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
-				}
+					//Cargo Hatch Middle-Side
+					if(gbuttonRed){
+						autonInstructions[1] = 66;
+						autonInstructions[2] = 22.37 * 12;
+						autonInstructions[3] = -156;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 
-				//Cargo Hatch Far-Side
-				if(gbutton4){
-					autonInstructions[1] = 68;
-					autonInstructions[2] = 24 * 12;
-					autonInstructions[3] = -158;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
-				}
+					//Cargo Hatch Far-Side
+					if(gbuttonGreen){
+						autonInstructions[1] = 68;
+						autonInstructions[2] = 24 * 12;
+						autonInstructions[3] = -158;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 
-				//Rocket Hatch Far
-				if(gbutton5){
-					autonInstructions[1] = 76;
-					autonInstructions[2] = 19.34 * 12;
-					autonInstructions[3] = -166;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
-				}
+					//Rocket Hatch Far
+					if(gbuttonAltGreen){
+						autonInstructions[1] = 76;
+						autonInstructions[2] = 19.34 * 12;
+						autonInstructions[3] = -166;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 
-				//Rocket Hatch Close
-				if(gbutton6){
-					autonInstructions[2] = 13 * 12;
-					autonInstructions[3] = 180;
-					autonInstructions[4] = -4 * 12;
-					ShouldFollowInstructions = true;
+					//Rocket Hatch Close
+					if(gbuttonAltRed){
+						autonInstructions[2] = 13 * 12;
+						autonInstructions[3] = 180;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+				} else if(gbuttonDown) {
+					//Cargo Hatch Close-Front
+					if(gbuttonOrange){
+					
+						autonInstructions[2] = 18 * 12;
+						autonInstructions[3] = 149;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+
+					//Cargo Hatch Close-Side
+					if(gbuttonYellow){
+						autonInstructions[1] = -54;
+						autonInstructions[2] = 20.85 * 12;
+						autonInstructions[3] = 154;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+
+					//Cargo Hatch Middle-Side
+					if(gbuttonRed){
+						autonInstructions[1] = -66;
+						autonInstructions[2] = 22.37 * 12;
+						autonInstructions[3] = 156;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+
+					//Cargo Hatch Far-Side
+					if(gbuttonGreen){
+						autonInstructions[1] = -68;
+						autonInstructions[2] = 24 * 12;
+						autonInstructions[3] = 158;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+
+					//Rocket Hatch Far
+					if(gbuttonAltGreen){
+						autonInstructions[1] = -76;
+						autonInstructions[2] = 19.34 * 12;
+						autonInstructions[3] = 166;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
+
+					//Rocket Hatch Close
+					if(gbuttonAltRed){
+						autonInstructions[2] = 13 * 12;
+						autonInstructions[3] = -180;
+						autonInstructions[4] = -4 * 12;
+						ShouldFollowInstructions = true;
+					}
 				}
 			}
 		}
@@ -431,14 +590,44 @@ public:
 		codriverY = joystick.GetY();
 		intake = joystick.GetPOV();
 
+		if (intake >= 315 || intake <= 45) {
+			//slow for outtake
+			wheelsTarget = 1;
+		} else {
+			//fast for intake
+			wheelsTarget = -1;
+		}
+
 		//Auton overide
 		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
 		runDockRobot = xboxController.GetBumper(frc::GenericHID::JoystickHand::kRightHand);
-		if (!dpadUp && xboxController.GetAButton()) incrementThreshold(serial_port);
-		if (!dpadDown && xboxController.GetBButton()) decrementThreshold(serial_port);
+		if (!runDockRobot) canRunDockRobot = true;
+		if (!XButton && xboxController.GetXButton()) calibrateVision(serial_port);
+		if (xboxController.GetAButton()) incrementThreshold(serial_port);
+		if (xboxController.GetBButton()) decrementThreshold(serial_port);
+		if (!nextCameraButton && xboxController.GetYButton()) nextCamera(serial_port);
+		XButton = xboxController.GetXButton();
 		dpadUp = xboxController.GetAButton();
 		dpadDown = xboxController.GetBButton();
+		nextCameraButton = xboxController.GetYButton();
 		if (xboxController.GetYButton()) serial_port.Reset();
+
+		gbuttonGreen = guitar.GetRawButton(GREEN) && !guitar.GetRawButton(AltColor);
+		gbuttonRed = guitar.GetRawButton(RED) && !guitar.GetRawButton(AltColor);
+		gbuttonBlue = guitar.GetRawButton(BLUE) && !guitar.GetRawButton(AltColor);
+		gbuttonYellow = guitar.GetRawButton(YELLOW) && !guitar.GetRawButton(AltColor);
+		gbuttonOrange = guitar.GetRawButton(ORANGE) && !guitar.GetRawButton(AltColor);
+		gbuttonAltGreen = guitar.GetRawButton(GREEN) && guitar.GetRawButton(AltColor);
+		gbuttonAltRed = guitar.GetRawButton(RED) && guitar.GetRawButton(AltColor);
+		gbuttonAltBlue = guitar.GetRawButton(BLUE) && guitar.GetRawButton(AltColor);
+		gbuttonAltYellow = guitar.GetRawButton(YELLOW) && guitar.GetRawButton(AltColor);
+		gbuttonAltOrange = guitar.GetRawButton(ORANGE) && guitar.GetRawButton(AltColor);
+		gbuttonUp = guitar.GetPOV() == 0;
+		gbuttonDown = guitar.GetPOV() == 180;
+
+		//cout << guitar.GetPOV() << endl;
+		//wamy bar guitar.GetX(frc::GenericHID::JoystickHand::kRightHand)
+		
 
 
 		/*#ifdef FINEMOTIONCONTROL
@@ -475,7 +664,7 @@ public:
 			vision_threshold = (uint8_t)vinfo.threshold;
 			cout << "Threshold now " << vision_threshold << "\n";
 		} else {
-			if (abs(frame.line_offset) < 25) cout << "Angle: " << frame.angle << ", offset: " << frame.line_offset << ", distance: " << frame.wall_distance << "\n";
+			if (abs(frame.angle) < 90) cout << "Angle: " << frame.angle << ", offset x: " << frame.line_offset << ", offset y: " << frame.line_offset_y << ", distance: " << frame.wall_distance << "\n";
 		}
 		last_frame_time = time_clock.now();
 		missed_frames = 0;
@@ -500,7 +689,7 @@ public:
 		//cout << autonInstructions[1] << " , " << autonInstructions[2] << " , " << autonInstructions[3] << " , " << autonInstructions[4] << endl;
 		//cout << "following auton" << " , ";
 		int currentInstrusction = Constant::MAX_AUTON_INSTRUCTIONS -1;
-		while(currentInstrusction >= 0 && autonInstructions[currentInstrusction] == 0){
+		while(currentInstrusction > 0 && autonInstructions[currentInstrusction] == 0){
 			currentInstrusction--;
 		}
 
@@ -509,18 +698,18 @@ public:
 			//Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
 			if((currentInstrusction % 2) == 0){
 				//distance
-				//cout << "driving distance" << endl;
-				if(DriveDistance(autonInstructions[currentInstrusction], 0.25)) {
-					//cout << "distance driven" << endl;
+				cout << "driving distance" << currentInstrusction << endl;
+				if(DriveDistance(autonInstructions[currentInstrusction], Constant::moveSpeed)) {
+					cout << "distance driven " << currentInstrusction << endl;
 					autonInstructions[currentInstrusction] = 0;
 					ResetEncoders();
 					ResetGyro();
 				}
 			} else {
 				//angle
-				//cout << "turning angle" << endl;
-				if(TurnDegrees(autonInstructions[currentInstrusction])) {
-					//cout << "angle turned" << endl;
+				cout << "turning angle" << currentInstrusction << endl;
+				if(autonInstructions[currentInstrusction] < 3 || TurnDegrees(autonInstructions[currentInstrusction])) {
+					cout << "angle turned " << currentInstrusction << endl;
 					autonInstructions[currentInstrusction] = 0;
 					ResetEncoders();
 					ResetGyro();
@@ -529,10 +718,16 @@ public:
 			}
 		}
 		//returns true if the last step is completed
-	return (autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1);
-	FollowingInstructions = true;
+		if(autonInstructions[currentInstrusction] == 0 && currentInstrusction <= 0) {
+			FollowingInstructions = true;
+			return true;
+		} else {
+			FollowingInstructions = false;
+			return false;
+		}
+	
 
-		//if(autonInstructions[currentInstrusction] == 0 && currentInstrusction == 1){
+		//if(autonInstructions[currentInstrusction] == 0 && currentInstrusction == 0){
 		//	DockRobot();
 		//}
 	}
@@ -540,6 +735,8 @@ public:
 	//clears all instructions in autonInstructions[]
 	void ClearAutonInstructions() {
 		for (int i = 0; i < Constant::MAX_AUTON_INSTRUCTIONS; i++) autonInstructions[i] = 0;
+		ResetEncoders();
+		ResetGyro();
 	}
 
 	//drives "inches" inches at "speed" the cruise velocity
@@ -603,24 +800,30 @@ public:
 	bool 
 	ApproachLine(float targetDistance) {
 		//returns true when done
+		cout << "ApproachLine" << endl;
 		CalculateAutonInstructions();
-		FollowAutonInstructions();
+		if(FollowAutonInstructions()) {
+			return true;
+		}
 		return false; // unimplemented
 	}
 
 	//call this to update autonInstructions[] make sure to call UpdateRaspiInput() first
 	//TODO
 	bool CalculateAutonInstructions() {
+		cout << "CalculateAutonInstructions" << endl;
 		//returns true if AutonInstructions have bean generated successfully
 
 		float outPut [Constant::MAX_AUTON_INSTRUCTIONS] = {}; //autonInstructions will be set to this if successful
 
-		float x = 1;
-		float y = 10;
+		float x = 1/*frame.wall_distance*/;
+		float y = 10/*frame.line_offset*/;
 		float targetAngle = (float)atan(y / x) * 180 / PI;
-		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR) {
-			outPut[1] = (float)atan(y / x) * 180 / PI; //TODO fix this its not exact
+		if(fabs(targetAngle - frame.angle) < Constant::ANGLE_MAX_ERROR || true) {
+			outPut[1] = 90 - ((float)atan(y / x) * 180 / PI); //TODO fix this its not exact
+			cout << "turn " << outPut[1] << endl;
 			outPut[0] = (float)sqrt( x*x + y*y ); //TODO fix this its not exact
+			cout << "streght " << (float)sqrt( x*x + y*y ) << endl;
 			for(int i = 0; i < Constant::MAX_AUTON_INSTRUCTIONS; i++){
 				autonInstructions[i] = outPut[i];
 			}
@@ -751,7 +954,7 @@ public:
 			cout << "Line is approachable.\n";
 			if (frame.wall_distance > 3 && !(frame.error & VISION_ERROR_BAD_DISTANCE)) {
 				ClearAutonInstructions();
-				autonInstructions[0] = (frame.wall_distance / (4 * 2.54)) + 2.0;
+				autonInstructions[0] = (frame.wall_distance / 2.54) - 2.0;
 				cout << "Instructions:\n";
 				cout << "\tMoving forward " << autonInstructions[0] << " inches.\n";
 				dock_state = 1;
@@ -780,6 +983,59 @@ public:
 			dock_state = 1;
 			return 0;
 		}
+	}
+
+	// Halts all motion.
+	void StopRobot() {
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		ResetEncoders();
+		ResetGyro();
+	}
+
+	// BREAKING NEWS: Jack announces Dock Robot 2 //
+	//    Said to be better than Dock Robot 1     //
+	bool dockRobot2Running = false;
+	int DockRobot2() {
+		IsLineApproachable();
+		if (frame.wall_distance < 15 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance != 0) {
+			cout << "=== Too close, stopping. === " << frame.wall_distance << "\n";
+			StopRobot();
+			return 1;
+		}
+		if (frame.wall_distance < 40 && frame.angle < 5.0 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance != 0) {
+			cout << "=== Using ultrasonic. ===\n";
+			if (dockRobot2Running) {
+				ResetEncoders();
+				ResetGyro();
+				float lastRotation = autonInstructions[1];
+				ClearAutonInstructions();
+				autonInstructions[1] = lastRotation;
+				autonInstructions[0] = frame.wall_distance / 2.54;
+				dockRobot2Running = false;
+			}
+			return FollowAutonInstructions();
+		}
+		if (dockRobot2Running) {
+			FollowAutonInstructions();
+			return 0;
+		}
+		if (frame.error) return -1;
+		float theta = (frame.line_offset * Constant::HORIZONTAL_FOV) / 640.0;
+		float r = Constant::CAMERA_HEIGHT * tan(((-frame.line_offset_y * rad(Constant::VERTICAL_FOV)) / 480.0) + atan(Constant::CAMERA_CENTER_LINE_DISTANCE / Constant::CAMERA_HEIGHT));
+		// In theory, this should be valid (though my track record with theories is not 100%)
+		ClearAutonInstructions();
+		autonInstructions[3] = theta;
+		autonInstructions[2] = abs(r);
+		autonInstructions[1] = -theta - frame.angle;
+		cout << "Instructions:\n";
+		cout << "\tRotating " << autonInstructions[3] << " degrees.\n";
+		cout << "\tMoving forward " << autonInstructions[2] << " inches.\n";
+		cout << "\tRotating " << autonInstructions[1] << " degrees.\n";
+		cout << "Theta: " << theta << ", r: " << r << "\n";
+		dockRobot2Running = true;
+		FollowAutonInstructions();
+		return 0;
 	}
 
 	//call every tick to take a hatch pannel from the brushes
@@ -822,13 +1078,15 @@ public:
 	//spins weels to shot out cargo
 	//TODO
 	void EjectCargo(){
-		for (int i = 0; i < 1000; i++) {
-			armLeader.Set(ControlMode::PercentOutput, 1);
-		}
+		// for (int i = 0; i < 1000; i++) {
+		// 	armLeader.Set(ControlMode::PercentOutput, 1);
+		// }
 		
-		armLeader.Set(ControlMode::PercentOutput, 0);
+		// armLeader.Set(ControlMode::PercentOutput, 0);
 		
 	}
 };
+
+bool Robot::cameraLoopStatus = false;
 
 START_ROBOT_CLASS(Robot);
