@@ -33,7 +33,7 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h>
 #include <opencv2/core/core.hpp>
-#define PORT     3805
+#define PORT    3805
 #define MAXLINE 1024 
 
 #include <math.h>
@@ -56,8 +56,8 @@ private:
 	string m_autoSelected;
 	
 
-	frc::XboxController xboxController{0};
-	frc::XboxController guitar{2};
+	frc::XboxController xboxController{1};
+	frc::XboxController guitar{0};
 
 	frc::Joystick joystick{1};
 	//Joystick joystick2, joystick2;
@@ -135,6 +135,7 @@ private:
 
 	DigitalInput* lowerLimitSwitch;
 	DigitalInput* uperLimitSwitch;
+	DigitalInput* isPractice;
 	
 	uint8_t vision_threshold;
 	chrono::steady_clock time_clock;
@@ -147,8 +148,10 @@ private:
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { pGyro };
-	// PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
-	PIDController pidAngle { 0.035, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
+	//practice
+	PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
+	//compition
+	//PIDController pidAngle { 0.035, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 public:
 	float autonInstructions [Constant::MAX_AUTON_INSTRUCTIONS];  //Even positions like autonInstructions[2] are distance and Odd ones are angles they are exicuted in order from greates to least
@@ -175,6 +178,7 @@ public:
 		//cameraThread.detach();
 		lowerLimitSwitch = new DigitalInput(0);
 		uperLimitSwitch = new DigitalInput(1);
+		isPractice = new DigitalInput(2);
 
 	}
 
@@ -365,12 +369,12 @@ public:
 
 	//this gets called every tick and contans all the drivetrain related code
 	void Drive() {
-		cout << "encoder" << armLeader.GetSelectedSensorPosition() << endl;
-		cout << "dio lower: " << lowerLimitSwitch->Get() << endl;
-		cout << "dio upper: " << uperLimitSwitch->Get() << endl;
+		// cout << "arm encoder" << armLeader.GetSelectedSensorPosition() << endl;
+		// cout << "dio lower: " << lowerLimitSwitch->Get() << endl;
+		// cout << "dio upper: " << uperLimitSwitch->Get() << endl;
 		if(!waiting){
 			UpdateControllerInputs();
-			UpdateRaspiInput();
+			//UpdateRaspiInput();
 			//cout << pGyro->GetYaw() << endl;
 			if(leftShoulder) {
 				isAuton=true;
@@ -382,21 +386,20 @@ public:
 				dockRobot2Running = false;
 			}
 
-			if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
+			//if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
 
 			if(isAuton) {
 				//gets of hab if on hab
-				/*if(!isOffHab) {
+				if(!isOffHab) {
 					GetOffHab();
-				} else*/ //{
+				} else {
 					//this code will run once off hab
-					// if (ShouldFollowInstructions) {
-					// 	if(FollowAutonInstructions()) {
-					// 		ShouldFollowInstructions = false;
-					// 	}
-					// }
-				//}
-				DriveDistance(26 * 2, 1);
+					if (ShouldFollowInstructions) {
+						if(FollowAutonInstructions()) {
+							ShouldFollowInstructions = false;
+						}
+					}
+				}
 				
 				
 				
@@ -426,20 +429,20 @@ public:
 				//Set the motors to the motor targets
 				leftLeader.Set(ControlMode::PercentOutput, leftTarget);
 				rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
-				cout << "Intake: " << intake << endl;
+				//cout << "Intake: " << intake << endl;
 				if(intake != -1) {
-					cout << "Intake setting" << endl;
+					//cout << "Intake setting" << endl;
 					intakeLeader.Set(ControlMode::PercentOutput, -wheelsTarget);
 					intakeFollower.Set(ControlMode::PercentOutput, -wheelsTarget);
 				} else {
-					cout << "STOP INTAKE" << endl;
+					//cout << "STOP INTAKE" << endl;
 					intakeLeader.Set(ControlMode::PercentOutput, 0);
 					intakeFollower.Set(ControlMode::PercentOutput, 0);
 				
 				}
 				//intakeLeader.Set(ControlMode::PercentOutput, intake);
-				cout << "intake: " << intake << endl;
-				cout << "coDriverY: " << codriverY << endl;
+				//cout << "intake: " << intake << endl;
+				//cout << "coDriverY: " << codriverY << endl;
 
 				if(codriverY < 0) {
 					if(!lowerLimitSwitch->Get()) {
@@ -465,12 +468,12 @@ public:
 				// autonInstructions[2] = 48;
 				// autonInstructions[3] = 90;
 				// ShouldFollowInstructions = true;
-				 
 				
 				if(gbuttonUp) {
 					//Cargo Hatch Close-Front
+					//cout << "UP" << endl;
 					if(gbuttonOrange){
-					
+						//cout << "Orange" << endl;
 						autonInstructions[2] = 18 * 12;
 						autonInstructions[3] = -149;
 						autonInstructions[4] = -4 * 12;
@@ -479,6 +482,7 @@ public:
 
 					//Cargo Hatch Close-Side
 					if(gbuttonYellow){
+						//cout << "Yellow" << endl;
 						autonInstructions[1] = 54;
 						autonInstructions[2] = 20.85 * 12;
 						autonInstructions[3] = -154;
@@ -488,6 +492,7 @@ public:
 
 					//Cargo Hatch Middle-Side
 					if(gbuttonRed){
+						//cout << "Red" << endl;
 						autonInstructions[1] = 66;
 						autonInstructions[2] = 22.37 * 12;
 						autonInstructions[3] = -156;
@@ -497,6 +502,7 @@ public:
 
 					//Cargo Hatch Far-Side
 					if(gbuttonGreen){
+						//cout << "Green" << endl;
 						autonInstructions[1] = 68;
 						autonInstructions[2] = 24 * 12;
 						autonInstructions[3] = -158;
@@ -506,6 +512,7 @@ public:
 
 					//Rocket Hatch Far
 					if(gbuttonAltGreen){
+						//cout << "Alt Green" << endl;
 						autonInstructions[1] = 76;
 						autonInstructions[2] = 19.34 * 12;
 						autonInstructions[3] = -166;
@@ -515,6 +522,7 @@ public:
 
 					//Rocket Hatch Close
 					if(gbuttonAltRed){
+						//cout << "Alt Red" << endl;
 						autonInstructions[2] = 13 * 12;
 						autonInstructions[3] = 180;
 						autonInstructions[4] = -4 * 12;
@@ -522,8 +530,9 @@ public:
 					}
 				} else if(gbuttonDown) {
 					//Cargo Hatch Close-Front
+					//cout << "DOWN" << endl;
 					if(gbuttonOrange){
-					
+						//cout << "Orange" << endl;
 						autonInstructions[2] = 18 * 12;
 						autonInstructions[3] = 149;
 						autonInstructions[4] = -4 * 12;
@@ -532,6 +541,7 @@ public:
 
 					//Cargo Hatch Close-Side
 					if(gbuttonYellow){
+						//cout << "Yellow" << endl;
 						autonInstructions[1] = -54;
 						autonInstructions[2] = 20.85 * 12;
 						autonInstructions[3] = 154;
@@ -541,6 +551,7 @@ public:
 
 					//Cargo Hatch Middle-Side
 					if(gbuttonRed){
+						//cout << "Red" << endl;
 						autonInstructions[1] = -66;
 						autonInstructions[2] = 22.37 * 12;
 						autonInstructions[3] = 156;
@@ -550,6 +561,7 @@ public:
 
 					//Cargo Hatch Far-Side
 					if(gbuttonGreen){
+						//cout << "Green" << endl;
 						autonInstructions[1] = -68;
 						autonInstructions[2] = 24 * 12;
 						autonInstructions[3] = 158;
@@ -559,6 +571,7 @@ public:
 
 					//Rocket Hatch Far
 					if(gbuttonAltGreen){
+						//cout << "Alt Green" << endl;
 						autonInstructions[1] = -76;
 						autonInstructions[2] = 19.34 * 12;
 						autonInstructions[3] = 166;
@@ -568,6 +581,7 @@ public:
 
 					//Rocket Hatch Close
 					if(gbuttonAltRed){
+						//cout << "Alt Red" << endl;
 						autonInstructions[2] = 13 * 12;
 						autonInstructions[3] = -180;
 						autonInstructions[4] = -4 * 12;
@@ -625,6 +639,15 @@ public:
 		gbuttonUp = guitar.GetPOV() == 0;
 		gbuttonDown = guitar.GetPOV() == 180;
 
+		if (gbuttonGreen && gbuttonUp) {
+			intake = 1;
+			wheelsTarget = -1;
+			cout << "Intake in" << endl;
+		} else if (gbuttonGreen && gbuttonDown) {
+			intake = 1;
+			wheelsTarget = 1;
+			cout << "Intake out" << endl;
+		}
 		//cout << guitar.GetPOV() << endl;
 		//wamy bar guitar.GetX(frc::GenericHID::JoystickHand::kRightHand)
 		
@@ -708,7 +731,7 @@ public:
 			} else {
 				//angle
 				cout << "turning angle" << currentInstrusction << endl;
-				if(autonInstructions[currentInstrusction] < 3 || TurnDegrees(autonInstructions[currentInstrusction])) {
+				if(abs(autonInstructions[currentInstrusction]) < 3 || TurnDegrees(autonInstructions[currentInstrusction])) {
 					cout << "angle turned " << currentInstrusction << endl;
 					autonInstructions[currentInstrusction] = 0;
 					ResetEncoders();
@@ -845,6 +868,7 @@ public:
 
 	//turns right if positve left if negitive || turns right for less than 180 and left for greater than 180
 	bool TurnDegrees(double degrees) {
+		cout << "Turning degrees: " << degrees << endl;
 		//returns true when done
 		if(degrees == 0){
 			return true;
