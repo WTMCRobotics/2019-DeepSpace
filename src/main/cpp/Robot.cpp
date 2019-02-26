@@ -56,8 +56,8 @@ private:
 	string m_autoSelected;
 	
 
-	frc::XboxController xboxController{1};
-	frc::XboxController guitar{0};
+	frc::XboxController xboxController{0};
+	frc::XboxController guitar{1};
 
 	frc::Joystick joystick{1};
 	//Joystick joystick2, joystick2;

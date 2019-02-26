@@ -8,7 +8,7 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
     vision_frame_t frame;
     frame.error = 0;
     if (serial.StatusIsFatal()) {
-        std::cout << "Serial is not available\n";
+        //std::cout << "Serial is not available\n";
         return frame;
     }
     while (true) {
