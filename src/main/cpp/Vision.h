@@ -29,7 +29,8 @@ typedef struct {
     float angle;
     int16_t line_offset;
     int16_t line_offset_y;
-    uint16_t wall_distance;
+    uint16_t wall_distance_left;
+    uint16_t wall_distance_right;
     uint16_t checksum;
     uint8_t error;
 } vision_frame_t;
@@ -38,7 +39,7 @@ typedef struct {
 typedef struct {
     uint32_t header;
     float threshold;
-    char zero[6];
+    char zero[8];
     uint16_t checksum;
     uint8_t error;
 } vision_info_t;

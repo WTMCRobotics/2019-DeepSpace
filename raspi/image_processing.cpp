@@ -1,13 +1,28 @@
 #define VISION_HEADER __builtin_bswap32(0x6101FEED)
 #define VISION_INFO __builtin_bswap32(0x6101DA7A)
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <cstdint>
 #include <csignal>
 #include <fcntl.h>
 #include <math.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <errno.h>
+#define PORT     3805
+#define MAXLINE 1024
 // #include <wiringSerial.h>
-#pragma region 
+#pragma region
 /*
  * wiringSerial.c:
  *	Handle a serial port
@@ -30,16 +45,16 @@
  ***********************************************************************
  */
 
-#include <stdio.h>
-#include <stdlib.h>
+//#include <stdio.h>
+//#include <stdlib.h>
 //#include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
+//#include <string.h>
 #include <termios.h>
-#include <unistd.h>
+//#include <unistd.h>
 //#include <fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/types.h>
+//#include <sys/types.h>
 #include <sys/stat.h>
 
 /*
@@ -250,7 +265,8 @@ serial frame:
 | B | Contents |
 | 4 | Header   |
 | 4 | Angle    |
-| 4 | Line     |
+| 2 | Line X   |
+| 2 | Line Y   |
 | 2 | Distance |
 | 2 | Checksum |
 
@@ -262,24 +278,92 @@ info frame:
 | 2 | Checksum |
  */
 
+typedef struct {
+    uint32_t header;
+    float angle;
+    int16_t lineX;
+    int16_t lineY;
+    uint16_t distance;
+    uint16_t checksum;
+} vision_frame_t;
+
 uchar pixel_threshold = 160;
 double brightness = 0.25;
-bool verbose = false;
+bool verbose = true;
 steady_clock::time_point t;
 std::vector<int> times;
 int serout;
-const char empty_frame[16] = {0x61, 0x01, 0xFE, 0xED, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xA0, 0x10};
+//const char empty_frame[16] = {0x61, 0x01, 0xFE, 0xED, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xA0, 0x10};
+vision_frame_t empty_frame = {VISION_HEADER, 0.0, 0, 0, 0, 0x10A0};
+uint8_t camera_mappings[4];
+uint8_t current_camera = 0;
+uint8_t max_camera = 0;
 
 // Ultrasonic functions because I'm too lazy to rewrite it all from the console
 extern void initTime();
 extern double getTime();
 
+// Driver code
+int sockfd = 3;
+
+bool initSocket() {
+    /*int sockfd, n;
+
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) return false;
+    server = gethostbyname("10.61.1.2");
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        return false;
+    }
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr,
+         (char *)&serv_addr.sin_addr.s_addr,
+         server->h_length);
+    serv_addr.sin_port = htons(3805);
+    if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) {
+        if (errno == ECONNRESET || errno == ECONNREFUSED || errno == EINVAL) {
+            close(sockfd);
+            return false;
+        }
+        return false;
+    } else fprintf(stderr, "Connected.\n");*/
+    return true;
+}
+
+ssize_t sendFrame(char * hello, unsigned int size) {
+    /*int i;
+    if (sockfd == 3) return 0;
+    for (i = 0; i < size; i += 256) {
+        int n = ::write(sockfd, &hello[i], (size - i < 256 ? size - i : 256));
+        if (n < 0) {
+            perror("Got error");
+            close(sockfd);
+            return n;
+        } else if (n != (size - i < 256 ? size - i : 256)) return i + n;
+        else fprintf(stderr, "Sent data\n");
+    }
+    return i;*/
+    return fwrite(hello, size, 1, stdout);
+}
+
 void outputImage(Mat cdst, bool success) {
-    std::cerr << "Outputting...\n";
+    //std::cerr << "Outputting...\n";
     //std::vector<uchar> buf;
     //imencode(".raw", cdst, buf);
     //std::cout << std::string((char*)&buf[0], buf.size());
-    ::write(1, cdst.data, cdst.dataend - cdst.datastart);
+    ssize_t sz = sendFrame((char*)cdst.data, cdst.dataend - cdst.datastart);
+    if (sz != cdst.dataend - cdst.datastart) {
+        if (sz == -1) {
+            std::cerr << "Error code: " << errno << ": ";
+            while (!initSocket()) ;
+        }
+        std::cerr << "Failed to send image! " << sz << "\n";
+    }
     #ifndef SILENT
     if (success) {
         std::cerr << "Got frame in " << (duration_cast<milliseconds>(steady_clock::now() - t)).count() << "ms\n";
@@ -288,7 +372,7 @@ void outputImage(Mat cdst, bool success) {
     #endif
     if (!success) {
         std::cerr << "Failed to get frame\n";
-        ::write(serout, empty_frame, 16);
+        ::write(serout, &empty_frame, 16);
     }
 }
 
@@ -343,6 +427,13 @@ int getRectCount(VideoCapture capture) {
     return contours.size();
 }
 
+void frameChecksum(vision_frame_t &frame) {
+    uint16_t * frame16 = (uint16_t*)&frame;
+    uint32_t sum = 0;
+    for (int i = 0; i < 7; i++) sum += frame16[i];
+    frame.checksum = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+}
+
 void calibrateVision(VideoCapture capture) {
     std::cerr << "Calibrating...\n";
     for (int c = getRectCount(capture); c != 1; c = getRectCount(capture)) {
@@ -350,18 +441,32 @@ void calibrateVision(VideoCapture capture) {
         else pixel_threshold--;
     }
     std::cerr << "Done.\n";
-    uint32_t frames[4];
-    frames[0] = VISION_INFO;
-    ((float*)(frames))[1] = (float)pixel_threshold;
-    for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-    uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
-    ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-    ::write(serout, frames, 16);
+    vision_frame_t frames;
+    frames.header = VISION_INFO;
+    frames.angle = (float)pixel_threshold;
+    frameChecksum(frames);
+    ::write(serout, &frames, 16);
+    std::ofstream out("~/threshold.txt");
+    if (out.is_open()) {
+        out.put(pixel_threshold);
+        out.close();
+    }
 }
 
 int main(int argc, const char * argv[]) {
     // Set up capture
-    VideoCapture capture(0);
+    if (argc < 2) {
+        std::cerr << "Missing camera IDs, please add the IDs to the input.\n";
+    } else {
+        std::string base_ids(argv[1]);
+        max_camera = (base_ids.size() / 2) - 1;
+        for (int i = 0; i < base_ids.size(); i+=2) {
+std::cerr << base_ids.substr(i, 1) << "\n";
+camera_mappings[i/2] = std::stoi(base_ids.substr(i, 1));
+}
+    }
+    VideoCapture capture(camera_mappings[0]);
+    VideoCapture cameraCapture;
     if(!capture.isOpened()) {
         std::cerr << "Failed to connect to the camera.\n";
         return 1;
@@ -378,8 +483,17 @@ int main(int argc, const char * argv[]) {
     #ifdef TFMINI
     int serin = serialOpen("/dev/ttyUSB0", 115200);
     #endif
-    if (argc > 1) verbose = true;
+    //if (argc > 1) verbose = true;
     initTime();
+    if (!initSocket()) {
+        std::cerr << "Failed to open socket.\n";
+        return 7;
+    }
+    std::ifstream in("~/threshold.txt");
+    if (in.is_open()) {
+        pixel_threshold = in.get();
+        in.close();
+    }
     fcntl (serout, F_SETFL, O_NONBLOCK);
     {
         uint32_t frames[4];
@@ -388,7 +502,7 @@ int main(int argc, const char * argv[]) {
         for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
         uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
         ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-        ::write(serout, frames, 16);
+        ::write(serout, &frames, 16);
     }
     signal(SIGINT, getResults);
     signal(SIGTERM, getResults);
@@ -397,16 +511,17 @@ int main(int argc, const char * argv[]) {
     signal(SIGPIPE, getResults);
     while (true) {
         t = steady_clock::now();
-        uint32_t frames[4];
+        vision_frame_t frames;
         bool success = false;
-        frames[0] = VISION_HEADER;
-        Mat frame, cdst(Size(640, 480*2), CV_8UC3), edges;
+        frames.header = VISION_HEADER;
+        Mat frame, cdst(Size(640, 480), CV_8UC3), edges;
         #ifdef CUDA
         cv::gpu::GpuMat gpuframe, bw, gpuedges;
         #else
         Mat bw;
         #endif
         capture >> frame;
+        if (current_camera != 0) cameraCapture >> cdst;
         if(frame.empty()) {
             std::cerr << "Failed to capture an image.\n";
             continue;
@@ -416,26 +531,31 @@ int main(int argc, const char * argv[]) {
         if (serialDataAvail(serout)) {
             c = serialGetchar(serout);
             if (c == '=' || c == '+') {
-                frames[0] = VISION_INFO;
-                ((float*)(frames))[1] = (float)++pixel_threshold;
-                for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-                uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
-                ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-                ::write(serout, frames, 16);
-                frames[0] = VISION_HEADER;
+                frames.header = VISION_INFO;
+                frames.angle = (float)++pixel_threshold;
+                frameChecksum(frames);
+                ::write(serout, &frames, 16);
+                frames.header = VISION_HEADER;
             } else if (c == '-' || c == '_') {
-                frames[0] = VISION_INFO;
-                ((float*)(frames))[1] = (float)--pixel_threshold;
-                for (int i = 8; i < 14; i++) ((uint8_t*)(frames))[i] = 0;
-                uint32_t sum = ((VISION_INFO >> 16) + (VISION_INFO & 0xFFFF) + ((uint16_t*)(frames))[2]) + ((uint16_t*)(frames))[3];
-                ((uint16_t*)(frames))[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
-                ::write(serout, frames, 16);
-                frames[0] = VISION_HEADER;
+                frames.header = VISION_INFO;
+                frames.angle = (float)--pixel_threshold;
+                frameChecksum(frames);
+                ::write(serout, &frames, 16);
+                frames.header = VISION_HEADER;
             } else if (c == 'c') {
                 calibrateVision(capture);
+            } else if (c == 'n') {
+                current_camera++;
+                if (current_camera > max_camera) current_camera = 0;
+                else {
+                    cameraCapture.release();
+                    cameraCapture = VideoCapture(camera_mappings[current_camera]);
+                    cameraCapture.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+                    cameraCapture.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+                }
             }
         }
-        if (verbose) frame.copyTo(cdst(Rect(0, 480, 640, 480)));
+        //if (verbose) frame.copyTo(cdst(Rect(0, 480, 640, 480)));
         // Get min/max values
         double min = 0, max = 0;
         #ifdef CUDA
@@ -455,7 +575,7 @@ int main(int argc, const char * argv[]) {
         #else
         threshold(bw, edges, (double)thresh, 255.0, THRESH_BINARY);
         #endif
-        if (verbose) {
+        if (verbose && current_camera == 0) {
             Mat edgesrgb;
             cvtColor(edges, edgesrgb, CV_GRAY2BGR);
             edgesrgb.copyTo(cdst(Rect(0, 0, 640, 480)));
@@ -480,11 +600,20 @@ int main(int argc, const char * argv[]) {
         cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
         if (contours.size() < 1) goto ErrorLine;
         {
+        int maxAreaRect = 0;
+        double maxArea = 0.0;
+        for (int i = 0; i < contours.size(); i++) {
+            double c = contourArea(contours[i], false);
+            if (c > maxArea) {
+                maxArea = c;
+                maxAreaRect = i;
+            }
+        }
         // fit bounding rectangle around contour
-        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[0]);
+        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[maxAreaRect]);
 
         // read points and angle
-        cv::Point2f rect_points[4]; 
+        cv::Point2f rect_points[4];
         rotatedRect.points( rect_points );
 
         float angle = rotatedRect.angle; // angle
@@ -504,42 +633,43 @@ int main(int argc, const char * argv[]) {
         cv::Point2f center = rotatedRect.center; // center
 
         // draw rotated rect
-        if (verbose)
+        if (verbose && current_camera == 0)
             for(unsigned int j=0; j<4; ++j)
                 cv::line(cdst, rect_points[j], rect_points[(j+1)%4], cv::Scalar(0,255,0));
 
         if (isnan(angle)) goto ErrorLine;
         {
-        frames[1] = *(uint32_t*)(&angle);
-        
+        frames.angle = angle;
+
         // Calculate offset
-        float multiplier = (center.x - 320.0) / sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
+        float multiplierX = (center.x - 320.0) / sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
+        float multiplierY = (center.y - 240.0) / sqrt(pow(usedEdge.x, 2) + pow(usedEdge.y, 2));
         // Game manual says the length of the tape is 2"/5.08 cm,
         // we can find the distance from the center using the multiplier
-        float cmDistance = multiplier * 5.08;
-        float inchDistance = multiplier * 2.0;
-        frames[2] = *(uint32_t*)(&cmDistance);
+        float cmDistanceX = multiplierX * 5.08;
+        float cmDistanceY = multiplierY * 5.08;
+        float inchDistanceX = multiplierX * 2.0;
+        float inchDistanceY = multiplierY * 2.0;
+        frames.lineX = (int16_t)(center.x - 320);
+        frames.lineY = (int16_t)(center.y - 240);
+        //frames[3] = *(uint32_t*)(&inchDistanceY);
         //std::cerr << cmDistance << "\n";
-        if (verbose) cv::line(cdst, Point2f(320.0, center.y), Point2f(center.x, center.y), cv::Scalar(0, 255, 0));
+        if (verbose && current_camera == 0) cv::line(cdst, Point2f(320.0, center.y), Point2f(center.x, center.y), cv::Scalar(0, 255, 0));
         success = true;
         }}}
 ErrorLine:
         // get distance data
-        uint16_t * frames16 = (uint16_t*)frames;
-        int16_t * frames16s = (int16_t*)frames;
-        frames16s[6] = (uint16_t)getTime();
-        if (frames16s[6] > 325) frames16s[6] = -1;
+        frames.distance = (uint16_t)getTime();
+        //if (frames.distance > 325) frames.distance = ;
 
         // get checksum
-        uint32_t sum = frames16[0] + frames16[1] + frames16[2] + 
-        frames16[3] + frames16[4] + frames16[5] + frames16[6];
-        frames16[7] = ~((uint16_t)(sum & 0xFFFF) + (uint16_t)(sum >> 16));
+        frameChecksum(frames);
 
         // send data out
-        ::write(serout, frames, 16);
+        if (::write(serout, &frames, 16) != 16) ::write(serout, &empty_frame, 16);
 
         // output final image
-        outputImage(edges, success);
+        outputImage(cdst, success);
     }
     return 0;
 }
