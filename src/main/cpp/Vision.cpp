@@ -44,19 +44,19 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
         // It aligns, read the rest
         ((char*)&frame)[0] = byte1;
         ((char*)&frame)[1] = byte2;
-        for (int i = 2; i < 16; i++) {
+        for (int i = 2; i < 18; i++) {
             serial.Read(&((char*)&frame)[i], 1);
             //std::cout << (int)((char*)&frame)[i] << " ";
         }
         if (frame.header != VISION_HEADER && frame.header != VISION_INFO) frame.error |= VISION_ERROR_BAD_HEADER;  
         if (frame.angle == 0 || frame.line_offset == 0 || frame.line_offset_y == 0) frame.error |= VISION_ERROR_BAD_RECT;
-        if (frame.wall_distance > 325 || frame.wall_distance == 0) frame.error |= VISION_ERROR_BAD_DISTANCE;
+        if (frame.wall_distance_left > 325 || frame.wall_distance_left == 0) frame.error |= VISION_ERROR_BAD_DISTANCE;
         uint16_t * frames16 = (uint16_t*)&frame;
         //std::cout << "\n";
         //for (int i = 0; i < 8; i++) std::cout << frames16[i] << " ";
         if (frames16[0] != 0x6101 && frames16[0] != 0x0161) frame.error |= VISION_ERROR_BROKEN;
         uint32_t subsum = frames16[0] + frames16[1] + frames16[2] + frames16[3] +
-                          frames16[4] + frames16[5] + frames16[6] + frames16[7];
+            frames16[4] + frames16[5] + frames16[6] + frames16[7] + frames16[8];
         uint16_t sum = ~((uint16_t)(subsum & 0xFFFF) + (uint16_t)(subsum >> 16));
         //std::cout << "\n" << subsum << " " << sum;
         if (sum != 0) frame.error |= VISION_ERROR_BAD_CHECKSUM;

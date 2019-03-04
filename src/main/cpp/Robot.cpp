@@ -7,9 +7,9 @@
 
 #include <frc/DigitalInput.h>
 
-#include <frc/liveWindow/LiveWindow.h>
-#include <frc/smartDashboard/SendableChooser.h>
-#include <frc/smartDashboard/SmartDashboard.h>
+//#include <frc/liveWindow/LiveWindow.h>
+//#include <frc/smartDashboard/SendableChooser.h>
+//#include <frc/smartDashboard/SmartDashboard.h>
 #include <frc/TimedRobot.h>
 
 #include <frc/Spark.h>
@@ -35,6 +35,7 @@
 #include <opencv2/core/core.hpp>
 #include <frc/DoubleSolenoid.h>
 #include <frc/Compressor.h>
+#include <sstream>
 #define PORT    3805
 #define MAXLINE 1024 
 
@@ -43,7 +44,6 @@
 #define rad(d) (d * (M_PI/180.0))
 
 #include "Vision.h"
-#include "server.h"
 
 using namespace frc;
 using namespace std;
@@ -51,7 +51,7 @@ using namespace std;
 class Robot : public frc::TimedRobot {
 
 private:
-	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
+	//frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
 	frc::SendableChooser<string> m_chooser;
 	const string kAutoNameDefault = "Default";
 	const string kAutoNameCustom = "My Auto";
@@ -201,26 +201,64 @@ public:
 
 	}
 
+	static void CameraError(std::string err) {
+		std::cout << "Error initializing camera: " << err << "\n";
+		cameraLoopStatus = false;
+	}
+
 	static void CameraServerLoop() {
-		// Server side implementation of UDP client-server model  
-		std::stringstream buf;
-		char buffer[640*480*3];
-		char * argv[2] = {"udpserver", "3805"};
-		std::thread serverThread(serverMain, 2, argv, &buf);
-		serverThread.detach();
-		//std::cout << "Connected.\n";
 		cs::CvSource outputStreamStd = CameraServer::GetInstance()->PutVideo("Vision Camera", 640, 480);
-		
+		int sockfd, newsockfd, clilen;
+		char buffer[256];
+		struct sockaddr_in serv_addr, cli_addr;
+		int n;
+		std::stringstream ss;
+		sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		if (sockfd < 0) 
+			return CameraError("Could not open socket");
+		bzero((char *) &serv_addr, sizeof(serv_addr));
+		int tru = 1;
+		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tru, sizeof(int)) < 0) 
+			return CameraError("Could not set socket options");
+		serv_addr.sin_family = AF_INET;
+		serv_addr.sin_addr.s_addr = INADDR_ANY;
+		serv_addr.sin_port = htons(3805);
+		if (bind(sockfd, (struct sockaddr *) &serv_addr,
+				sizeof(serv_addr)) < 0) 
+				return CameraError("Could not bind socket to port");
+Restart:
+		listen(sockfd,5);
+		clilen = sizeof(cli_addr);
+		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, (unsigned int*)&clilen);
+		if (newsockfd < 0) 
+			return CameraError("Could not accept connection");
+		bzero(buffer,256);
+		cameraLoopStatus = true;
+		std::cout << "Connected to raspi.\n";
+		long long count = 0;
 		while (true) {
-			unsigned int len = 0;
-			long long n = 0; 
-			while (n < 640*480*3) {
-				n += buf.readsome(buffer, (n - 256 < 0 ? n - 256 : 256));
-				std::cout << "Recieved data\n";
-			} 
-			std::cout << "Got frame from pi\n";
-			cv::Mat image(cv::Size(640, 480), CV_8UC3, buffer, cv::Mat::AUTO_STEP);
-			outputStreamStd.PutFrame(image);
+			n = ::read(newsockfd,buffer,256);
+			if (n < 0) return CameraError("Could not read camera data!");
+			ss.write(buffer, n);
+			count += n;
+			/*if (strlen(buffer) == 0) {
+				int cont = 1;
+				for (int i = 0; i < 256; i++) {if (buffer[i] != 0) {cont = 0; break;}}
+				if (cont) {
+					shutdown(sockfd, SHUT_RDWR);
+					fprintf(stderr, "Disconnected.\n");
+					goto Restart;
+				}
+			}*/
+			if (count >= 640*480*3) {
+				std::cout << "Got frame from pi\n";
+				char imbuffer[640*480*3];
+				ss.read(imbuffer, 640*480*3);
+				cv::Mat image(cv::Size(640, 480), CV_8UC3, imbuffer, cv::Mat::AUTO_STEP);
+				outputStreamStd.PutFrame(image);
+				count -= 640*480*3;
+			}
+			bzero(buffer, 256);
 		}
 	}
 
@@ -706,7 +744,7 @@ public:
 			vision_threshold = (uint8_t)vinfo.threshold;
 			cout << "Threshold now " << vision_threshold << "\n";
 		} else {
-			if (abs(frame.angle) < 90) cout << "Angle: " << frame.angle << ", offset x: " << frame.line_offset << ", offset y: " << frame.line_offset_y << ", distance: " << frame.wall_distance << "\n";
+			if (abs(frame.angle) < 90) cout << "Angle: " << frame.angle << ", offset x: " << frame.line_offset << ", offset y: " << frame.line_offset_y << ", distance: " << frame.wall_distance_left << "\n";
 		}
 		last_frame_time = time_clock.now();
 		missed_frames = 0;
@@ -1038,9 +1076,9 @@ public:
 		}
 		if (IsLineApproachable()) {
 			cout << "Line is approachable.\n";
-			if (frame.wall_distance > 3 && !(frame.error & VISION_ERROR_BAD_DISTANCE)) {
+			if (frame.wall_distance_left > 3 && !(frame.error & VISION_ERROR_BAD_DISTANCE)) {
 				ClearAutonInstructions();
-				autonInstructions[0] = (frame.wall_distance / 2.54) - 2.0;
+				autonInstructions[0] = (frame.wall_distance_left / 2.54) - 2.0;
 				cout << "Instructions:\n";
 				cout << "\tMoving forward " << autonInstructions[0] << " inches.\n";
 				dock_state = 1;
@@ -1084,12 +1122,12 @@ public:
 	bool dockRobot2Running = false;
 	int DockRobot2() {
 		IsLineApproachable();
-		if (frame.wall_distance < 15 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance != 0) {
-			cout << "=== Too close, stopping. === " << frame.wall_distance << "\n";
+		if (frame.wall_distance_left < 15 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance_left != 0) {
+			cout << "=== Too close, stopping. === " << frame.wall_distance_left << "\n";
 			StopRobot();
 			return 1;
 		}
-		if (frame.wall_distance < 40 && frame.angle < 5.0 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance != 0) {
+		if (frame.wall_distance_left < 40 && frame.angle < 5.0 && !(frame.error & VISION_ERROR_BAD_DISTANCE) && frame.wall_distance_left != 0) {
 			cout << "=== Using ultrasonic. ===\n";
 			if (dockRobot2Running) {
 				ResetEncoders();
@@ -1097,7 +1135,7 @@ public:
 				float lastRotation = autonInstructions[1];
 				ClearAutonInstructions();
 				autonInstructions[1] = lastRotation;
-				autonInstructions[0] = frame.wall_distance / 2.54;
+				autonInstructions[0] = frame.wall_distance_left / 2.54;
 				dockRobot2Running = false;
 			}
 			return FollowAutonInstructions();
@@ -1175,4 +1213,5 @@ public:
 
 bool Robot::cameraLoopStatus = false;
 
-START_ROBOT_CLASS(Robot);
+//START_ROBOT_CLASS(Robot)
+int main() {return frc::StartRobot<Robot>();}
