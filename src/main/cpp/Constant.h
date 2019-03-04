@@ -16,6 +16,33 @@ public:
 
 	static const int LeftLeaderID = 21;
 	static const int LeftFollowerID = 22;
+//Pneumatics------------------------------------
+	static const int PCM_ID = 0;
+
+	static const int PCM_CHANNEL_FRONT_LEFT = 2;
+	static const int PCM_CHANNEL_FRONT_LEFT_OUT = 2;
+	static const int PCM_CHANNEL_FRONT_LEFT_IN = 2;
+
+	static const int PCM_CHANNEL_FRONT_RIGHT = 3;
+	static const int PCM_CHANNEL_FRONT_RIGHT_OUT = 3;
+	static const int PCM_CHANNEL_FRONT_RIGHT_IN = 3;
+
+	static const int PCM_CHANNEL_REAR_LEFT = 4;
+	static const int PCM_CHANNEL_REAR_LEFT_OUT = 4;
+	static const int PCM_CHANNEL_REAR_LEFT_IN = 4;
+
+	static const int PCM_CHANNEL_REAR_RIGHT = 5;
+	static const int PCM_CHANNEL_REAR_RIGHT_OUT = 5;
+	static const int PCM_CHANNEL_REAR_RIGHT_IN = 5;
+
+	static const int PCM_CHANNEL_EJECT_LEFT = 0;
+	static const int PCM_CHANNEL_EJECT_LEFT = 0;
+	static const int PCM_CHANNEL_EJECT_LEFT_IN = 0;
+
+	static const int PCM_CHANNEL_EJECT_RIGHT = 1;
+	static const int PCM_CHANNEL_EJECT_RIGHT_OUT = 1;
+	static const int PCM_CHANNEL_EJECT_RIGHT_IN = 1;
+//End Pneumatics-----------------------------------
 
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;

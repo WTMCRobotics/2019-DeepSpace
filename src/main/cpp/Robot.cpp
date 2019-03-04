@@ -33,6 +33,8 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h>
 #include <opencv2/core/core.hpp>
+#include <frc/DoubleSolenoid.h>
+#include <frc/Compressor.h>
 #define PORT    3805
 #define MAXLINE 1024 
 
@@ -144,6 +146,23 @@ private:
 
 	static bool cameraLoopStatus;
 
+
+
+	frc::Compressor compresser {Constant::PCM_ID};
+
+	frc::DoubleSolenoid frontLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_FRONT_LEFT_IN, Constant::PCM_CHANNEL_FRONT_LEFT_OUT};
+	
+	frc::DoubleSolenoid frontRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_FRONT_RIGHT_IN, Constant::PCM_CHANNEL_FRONT_RIGHT_OUT};
+
+	frc::DoubleSolenoid rearLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_REAR_LEFT_IN, Constant::PCM_CHANNEL_REAR_LEFT_OUT};
+
+	frc::DoubleSolenoid rearRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_REAR_RIGHT_IN, Constant::PCM_CHANNEL_REAR_RIGHT_OUT};
+
+	frc::DoubleSolenoid ejectLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
+
+	frc::DoubleSolenoid ejectRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
+
+	
 	double wheelsTarget;
 	//PID for turning
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
@@ -941,7 +960,50 @@ public:
 	//sets "pistonID" to extended if true and retracted if false
 	//TODO
 	void SetPistonExtended(int pistonID, bool value){
-
+		switch(pistonID) {
+			case Constant::PCM_CHANNEL_FRONT_LEFT:
+				if(value) {
+					frontLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					frontLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+			case Constant::PCM_CHANNEL_FRONT_RIGHT:
+				if(value) {
+					frontRightSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					frontRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+			case Constant::PCM_CHANNEL_REAR_LEFT:
+				if(value) {
+					rearLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					rearLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+			case Constant::PCM_CHANNEL_REAR_RIGHT:
+				if(value) {
+					rearRightSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					rearRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+			case Constant::PCM_CHANNEL_EJECT_LEFT:
+				if(value) {
+					ejectLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					ejectLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+			case Constant::PCM_CHANNEL_EJECT_RIGHT:
+				if(value) {
+					ejectRightSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					ejectRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
+		}
 	}
 
 	//checks whether the piston is extended
