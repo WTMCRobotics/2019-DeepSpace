@@ -147,20 +147,19 @@ private:
 	static bool cameraLoopStatus;
 
 
-
 	frc::Compressor compresser {Constant::PCM_ID};
 
-	frc::DoubleSolenoid frontLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_FRONT_LEFT_IN, Constant::PCM_CHANNEL_FRONT_LEFT_OUT};
+	frc::DoubleSolenoid frontLeftSol {Constant::PCM_CHANNEL_FRONT_LEFT_IN, Constant::PCM_CHANNEL_FRONT_LEFT_OUT};
 	
-	frc::DoubleSolenoid frontRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_FRONT_RIGHT_IN, Constant::PCM_CHANNEL_FRONT_RIGHT_OUT};
+	frc::DoubleSolenoid frontRightSol {Constant::PCM_CHANNEL_FRONT_RIGHT_IN, Constant::PCM_CHANNEL_FRONT_RIGHT_OUT};
 
-	frc::DoubleSolenoid rearLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_REAR_LEFT_IN, Constant::PCM_CHANNEL_REAR_LEFT_OUT};
+	frc::DoubleSolenoid rearLeftSol {Constant::PCM_CHANNEL_REAR_LEFT_IN, Constant::PCM_CHANNEL_REAR_LEFT_OUT};
 
-	frc::DoubleSolenoid rearRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_REAR_RIGHT_IN, Constant::PCM_CHANNEL_REAR_RIGHT_OUT};
+	frc::DoubleSolenoid rearRightSol {Constant::PCM_CHANNEL_REAR_RIGHT_IN, Constant::PCM_CHANNEL_REAR_RIGHT_OUT};
 
-	frc::DoubleSolenoid ejectLeftSol {Constant::PCM_ID, Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
+	frc::DoubleSolenoid ejectLeftSol {Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
 
-	frc::DoubleSolenoid ejectRightSol {Constant::PCM_ID, Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
+	frc::DoubleSolenoid ejectRightSol {Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
 
 	
 	double wheelsTarget;
@@ -183,22 +182,6 @@ public:
 	double addWithMax(double add1, double add2, double max, double min = 0.0) {
 		if (add1 + add2 >= max) return ((add1 + add2) - max * floor((add1 + add2) / max)) + min;
 		else return add1 + add2;
-	}
-
-	//this gets called once at the beggining of the match
-	void RobotInit() {
-		SetupMoters();
-		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
-		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
-		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-		serial_port.SetTimeout(.05);
-		serial_port.Reset();
-		//std::thread cameraThread(CameraServerLoop);
-		//cameraThread.detach();
-		lowerLimitSwitch = new DigitalInput(0);
-		uperLimitSwitch = new DigitalInput(1);
-		isPractice = new DigitalInput(2);
-
 	}
 
 	static void CameraError(std::string err) {
@@ -260,6 +243,29 @@ Restart:
 			}
 			bzero(buffer, 256);
 		}
+	}
+
+	std::thread cameraThread;
+
+	//this gets called once at the beggining of the match
+	void RobotInit() {
+		SetupMoters();
+		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
+		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
+		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+		serial_port.SetTimeout(.05);
+		serial_port.Reset();
+		try {
+	    	cameraThread = std::thread(CameraServerLoop);
+			cameraThread.detach();
+		} catch (std::exception e) {
+			std::cout << "Could not start camera thread\n";
+			cameraLoopStatus = false;
+		}
+		lowerLimitSwitch = new DigitalInput(0);
+		uperLimitSwitch = new DigitalInput(1);
+		isPractice = new DigitalInput(2);
+
 	}
 
 	//configures the motors should be called at begining of match
@@ -673,7 +679,7 @@ Restart:
 		leftShoulder = xboxController.GetBumper(frc::GenericHID::JoystickHand::kLeftHand);
 		runDockRobot = xboxController.GetBumper(frc::GenericHID::JoystickHand::kRightHand);
 		if (!runDockRobot) canRunDockRobot = true;
-		if (!XButton && xboxController.GetXButton()) calibrateVision(serial_port);
+		//if (!XButton && xboxController.GetXButton()) calibrateVision(serial_port);
 		if (xboxController.GetAButton()) incrementThreshold(serial_port);
 		if (xboxController.GetBButton()) decrementThreshold(serial_port);
 		if (!nextCameraButton && xboxController.GetYButton()) nextCamera(serial_port);

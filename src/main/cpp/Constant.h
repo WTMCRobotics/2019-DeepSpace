@@ -36,7 +36,7 @@ public:
 	static const int PCM_CHANNEL_REAR_RIGHT_IN = 5;
 
 	static const int PCM_CHANNEL_EJECT_LEFT = 0;
-	static const int PCM_CHANNEL_EJECT_LEFT = 0;
+	static const int PCM_CHANNEL_EJECT_LEFT_OUT = 0;
 	static const int PCM_CHANNEL_EJECT_LEFT_IN = 0;
 
 	static const int PCM_CHANNEL_EJECT_RIGHT = 1;
