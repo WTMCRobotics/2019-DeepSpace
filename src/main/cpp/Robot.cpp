@@ -73,16 +73,25 @@ private:
 	double armTarget;
 	double intake;
 
-	//triggers
+	//xbox triggers
 	double rightTrigger;//not used yet
 	double leftTrigger;//not used yet
 	bool rightShoulder;//not used yet
 	bool leftShoulder;
-	bool XButton;
+
+	//xbox dpad
 	bool dpadUp;
 	bool dpadDown;
 	bool nextCameraButton;
 
+	//xbox buttons
+
+	bool AButton;
+	bool BButton;
+	bool XButton;
+	bool YButton;
+	
+	//gHero controler buttons
 	bool gbuttonGreen;
 	bool gbuttonRed;
 	bool gbuttonBlue;
@@ -439,6 +448,15 @@ Restart:
 			UpdateControllerInputs();
 			//UpdateRaspiInput();
 			//cout << pGyro->GetYaw() << endl;
+
+			if(AButton) {
+				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, true);
+				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, true);
+			} else {
+				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, false);
+				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, false);
+			}
+
 			if(leftShoulder) {
 				isAuton=true;
 			} else {
@@ -683,9 +701,14 @@ Restart:
 		if (xboxController.GetAButton()) incrementThreshold(serial_port);
 		if (xboxController.GetBButton()) decrementThreshold(serial_port);
 		if (!nextCameraButton && xboxController.GetYButton()) nextCamera(serial_port);
+		AButton = xboxController.GetAButton();
+		BButton = xboxController.GetBButton();
 		XButton = xboxController.GetXButton();
-		dpadUp = xboxController.GetAButton();
-		dpadDown = xboxController.GetBButton();
+		YButton = xboxController.GetYButton();
+		//dpadUp = xboxController.GetAButton();
+		//dpadDown = xboxController.GetBButton();
+		dpadUp = (xboxController.GetPOV() == 0);
+		dpadDown = (xboxController.GetPOV() == 180);
 		nextCameraButton = xboxController.GetYButton();
 		if (xboxController.GetYButton()) serial_port.Reset();
 
