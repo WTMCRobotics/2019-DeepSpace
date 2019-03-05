@@ -90,6 +90,11 @@ private:
 	bool BButton;
 	bool XButton;
 	bool YButton;
+
+	//joystick buttons
+
+	bool latchButton;
+	bool unLatchButton;
 	
 	//gHero controler buttons
 	bool gbuttonGreen;
@@ -146,6 +151,7 @@ private:
 
 	DigitalInput* lowerLimitSwitch;
 	DigitalInput* uperLimitSwitch;
+	DigitalInput* latchLimitSwitch;
 	DigitalInput* isPractice;
 	
 	uint8_t vision_threshold;
@@ -169,6 +175,8 @@ private:
 	frc::DoubleSolenoid ejectLeftSol {Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
 
 	frc::DoubleSolenoid ejectRightSol {Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
+
+	frc::DoubleSolenoid latchSol {Constant::PCM_CHANNEL_LATCH_IN, Constant::PCM_CHANNEL_LATCH_OUT};
 
 	
 	double wheelsTarget;
@@ -199,59 +207,77 @@ public:
 	}
 
 	static void CameraServerLoop() {
-		cs::CvSource outputStreamStd = CameraServer::GetInstance()->PutVideo("Vision Camera", 640, 480);
-		int sockfd, newsockfd, clilen;
-		char buffer[256];
-		struct sockaddr_in serv_addr, cli_addr;
-		int n;
-		std::stringstream ss;
-		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd < 0) 
-			return CameraError("Could not open socket");
-		bzero((char *) &serv_addr, sizeof(serv_addr));
-		int tru = 1;
-		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tru, sizeof(int)) < 0) 
-			return CameraError("Could not set socket options");
-		serv_addr.sin_family = AF_INET;
-		serv_addr.sin_addr.s_addr = INADDR_ANY;
-		serv_addr.sin_port = htons(3805);
-		if (bind(sockfd, (struct sockaddr *) &serv_addr,
-				sizeof(serv_addr)) < 0) 
-				return CameraError("Could not bind socket to port");
-Restart:
-		listen(sockfd,5);
-		clilen = sizeof(cli_addr);
-		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, (unsigned int*)&clilen);
-		if (newsockfd < 0) 
-			return CameraError("Could not accept connection");
-		bzero(buffer,256);
-		cameraLoopStatus = true;
-		std::cout << "Connected to raspi.\n";
-		long long count = 0;
-		while (true) {
-			n = ::read(newsockfd,buffer,256);
-			if (n < 0) return CameraError("Could not read camera data!");
-			ss.write(buffer, n);
-			count += n;
-			/*if (strlen(buffer) == 0) {
-				int cont = 1;
-				for (int i = 0; i < 256; i++) {if (buffer[i] != 0) {cont = 0; break;}}
-				if (cont) {
-					shutdown(sockfd, SHUT_RDWR);
-					fprintf(stderr, "Disconnected.\n");
-					goto Restart;
+		try {
+			cs::CvSource outputStreamStd = CameraServer::GetInstance()->PutVideo("Vision Camera", 640, 480);
+			int sockfd, newsockfd, clilen;
+			char buffer[256];
+			struct sockaddr_in serv_addr, cli_addr;
+			int n;
+			std::stringstream ss;
+			sockfd = socket(AF_INET, SOCK_STREAM, 0);
+			if (sockfd < 0) 
+				return CameraError("Could not open socket");
+			std::cout << "Created socket";
+			std::cout.flush();
+			memset((void*)&serv_addr, sizeof(serv_addr), 0);
+			//bzero((char *) &serv_addr, sizeof(serv_addr));
+			int tru = 1;
+			if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tru, sizeof(int)) < 0) 
+				return CameraError("Could not set socket options");
+			std::cout << "Set socket options";
+			std::cout.flush();
+			serv_addr.sin_family = AF_INET;
+			serv_addr.sin_addr.s_addr = INADDR_ANY;
+			serv_addr.sin_port = htons(3805);
+			if (bind(sockfd, (struct sockaddr *) &serv_addr,
+					sizeof(serv_addr)) < 0) 
+					return CameraError("Could not bind socket to port");
+			std::cout << "Bound socket";
+			std::cout.flush();
+			listen(sockfd,5);
+			std::cout << "Done listening";
+			std::cout.flush();
+			clilen = sizeof(cli_addr);
+			newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, (unsigned int*)&clilen);
+			if (newsockfd < 0) 
+				return CameraError("Could not accept connection");
+			std::cout << "Accepted connection";
+			std::cout.flush();
+			//bzero(buffer,256);
+			cameraLoopStatus = true;
+			std::cout << "Connected to raspi.\n";
+			long long count = 0;
+			while (true) {
+				n = read(newsockfd,buffer,256);
+				if (n < 0) return CameraError("Could not read camera data!");
+				ss.write(buffer, n);
+				count += n;
+				/*if (strlen(buffer) == 0) {
+					int cont = 1;
+					for (int i = 0; i < 256; i++) {if (buffer[i] != 0) {cont = 0; break;}}
+					if (cont) {
+						shutdown(sockfd, SHUT_RDWR);
+						fprintf(stderr, "Disconnected.\n");
+						goto Restart;
+					}
+				}*/
+				if (count >= 640*480*3) {
+					std::cout << "Got frame from pi\n";
+					char imbuffer[640*480*3];
+					ss.read(imbuffer, 640*480*3);
+					cv::Mat image(cv::Size(640, 480), CV_8UC3, imbuffer, cv::Mat::AUTO_STEP);
+					outputStreamStd.PutFrame(image);
+					count -= 640*480*3;
 				}
-			}*/
-			if (count >= 640*480*3) {
-				std::cout << "Got frame from pi\n";
-				char imbuffer[640*480*3];
-				ss.read(imbuffer, 640*480*3);
-				cv::Mat image(cv::Size(640, 480), CV_8UC3, imbuffer, cv::Mat::AUTO_STEP);
-				outputStreamStd.PutFrame(image);
-				count -= 640*480*3;
+				//this line of code makes things crash--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+				//bzero(buffer, 256);
 			}
-			bzero(buffer, 256);
+		} catch (std::exception e) {
+			std::cout << "Got exception: " << e.what() << "\n";
+			cameraLoopStatus = false;
+			return;
 		}
+		//while (true) ;
 	}
 
 	std::thread cameraThread;
@@ -273,8 +299,9 @@ Restart:
 		}
 		lowerLimitSwitch = new DigitalInput(0);
 		uperLimitSwitch = new DigitalInput(1);
-		isPractice = new DigitalInput(2);
-
+		latchLimitSwitch = new DigitalInput(2);
+		isPractice = new DigitalInput(3);
+	
 	}
 
 	//configures the motors should be called at begining of match
@@ -457,6 +484,22 @@ Restart:
 				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, false);
 			}
 
+			if(codriverY < -15) {
+				if(!lowerLimitSwitch->Get()) {
+					armLeader.Set(ControlMode::PercentOutput, codriverY * 0.1);
+				} else {
+					armLeader.Set(ControlMode::PercentOutput, 0);
+				}
+			} else if(codriverY > 15) {
+				if(!uperLimitSwitch->Get()){
+					armLeader.Set(ControlMode::PercentOutput, codriverY * 0.5);
+				} else {
+					armLeader.Set(ControlMode::PercentOutput, 0);
+				}
+			} else {
+				armLeader.Set(ControlMode::PercentOutput, 0);
+			}
+
 			if(leftShoulder) {
 				isAuton=true;
 			} else {
@@ -468,8 +511,11 @@ Restart:
 			}
 
 			//if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
+			if(BButton){
+				PlaceHatch();
 
-			if(isAuton) {
+			} else if(isAuton) {
+				
 				//gets of hab if on hab
 				if(!isOffHab) {
 					GetOffHab();
@@ -525,19 +571,13 @@ Restart:
 				//cout << "intake: " << intake << endl;
 				//cout << "coDriverY: " << codriverY << endl;
 
-				if(codriverY < 0) {
-					if(!lowerLimitSwitch->Get()) {
-						armLeader.Set(ControlMode::PercentOutput, codriverY * 0.1);
-					} else {
-						armLeader.Set(ControlMode::PercentOutput, 0);
-					}
-				} else {
-					if(!uperLimitSwitch->Get()){
-						armLeader.Set(ControlMode::PercentOutput, codriverY * 0.5);
-					} else {
-						armLeader.Set(ControlMode::PercentOutput, 0);
-					}
+				if(latchButton) {
+					SetPistonExtended(Constant::PCM_CHANNEL_LATCH, true);
+				} else if (unLatchButton) {
+					SetPistonExtended(Constant::PCM_CHANNEL_LATCH, false);
 				}
+
+				
 
 				//gets things ready for when auton is enabled
 				ResetEncoders();	
@@ -711,6 +751,9 @@ Restart:
 		dpadDown = (xboxController.GetPOV() == 180);
 		nextCameraButton = xboxController.GetYButton();
 		if (xboxController.GetYButton()) serial_port.Reset();
+
+		latchButton = guitar.GetRawButton(3);
+		unLatchButton = guitar.GetRawButton(4);
 
 		gbuttonGreen = guitar.GetRawButton(GREEN) && !guitar.GetRawButton(AltColor);
 		gbuttonRed = guitar.GetRawButton(RED) && !guitar.GetRawButton(AltColor);
@@ -1070,14 +1113,14 @@ Restart:
 					ejectRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
 				}
 				break;
+			case Constant::PCM_CHANNEL_LATCH:
+				if(value) {
+					latchSol.Set(frc::DoubleSolenoid::Value::kForward);
+				} else {
+					latchSol.Set(frc::DoubleSolenoid::Value::kReverse);
+				}
+				break;
 		}
-	}
-
-	//checks whether the piston is extended
-	//TODO
-	bool GetPistonExtended(int pistonID){
-		//returns true if "pistonID" is extended false if retracted
-		return false; // unimplemented
 	}
 
 	// Checks if vision is active and available
@@ -1200,13 +1243,14 @@ Restart:
 
 	//call every tick to place the hatch pannel on a rocket or cargoship
 	//TODO
-	bool PlaceHatch(){
-		//returns true when done
-
-		//SetArmAngle();
-		//DriveDistance();
-		//EjectHatch();
-		return false; // unimplemented
+	void PlaceHatch(){
+		if(latchLimitSwitch->Get()) {
+			SetPistonExtended(Constant::PCM_CHANNEL_LATCH, true);
+			SetArmAngle(90);
+		} else {
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
+		}
 	}
 
 	//call every tick to set the arm angle to "angle"
@@ -1214,12 +1258,6 @@ Restart:
 	bool SetArmAngle(float angle){
 		//returns true when done
 		return false; // unimplemented
-	}
-
-	//fires pistons to remove hatch from robot velcrow
-	//TODO
-	void EjectHatch(){
-
 	}
 
 	// call every tick to put the orange ball in a cargoship/rocket

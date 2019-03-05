@@ -42,6 +42,10 @@ public:
 	static const int PCM_CHANNEL_EJECT_RIGHT = 1;
 	static const int PCM_CHANNEL_EJECT_RIGHT_OUT = 1;
 	static const int PCM_CHANNEL_EJECT_RIGHT_IN = 1;
+
+	static const int PCM_CHANNEL_LATCH = 6;
+	static const int PCM_CHANNEL_LATCH_OUT = 6;
+	static const int PCM_CHANNEL_LATCH_IN = 6;
 //End Pneumatics-----------------------------------
 
 	static const int RightLeaderID = 11;
