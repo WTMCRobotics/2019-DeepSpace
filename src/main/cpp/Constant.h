@@ -12,10 +12,6 @@
 class Constant
 {
 public:
-	static const int pidChannel = 0;
-
-	static const int LeftLeaderID = 21;
-	static const int LeftFollowerID = 22;
 //Pneumatics------------------------------------
 	static const int PCM_ID = 0;
 
@@ -23,17 +19,17 @@ public:
 	static const int PCM_CHANNEL_FRONT_LEFT_OUT = 2;
 	static const int PCM_CHANNEL_FRONT_LEFT_IN = 2;
 
-	static const int PCM_CHANNEL_FRONT_RIGHT = 3;
-	static const int PCM_CHANNEL_FRONT_RIGHT_OUT = 3;
-	static const int PCM_CHANNEL_FRONT_RIGHT_IN = 3;
+	static const int PCM_CHANNEL_FRONT_RIGHT = 2;
+	static const int PCM_CHANNEL_FRONT_RIGHT_OUT = 2;
+	static const int PCM_CHANNEL_FRONT_RIGHT_IN = 2;
 
-	static const int PCM_CHANNEL_REAR_LEFT = 4;
-	static const int PCM_CHANNEL_REAR_LEFT_OUT = 4;
-	static const int PCM_CHANNEL_REAR_LEFT_IN = 4;
+	static const int PCM_CHANNEL_REAR_LEFT = 3;
+	static const int PCM_CHANNEL_REAR_LEFT_OUT = 3;
+	static const int PCM_CHANNEL_REAR_LEFT_IN = 3;
 
-	static const int PCM_CHANNEL_REAR_RIGHT = 5;
-	static const int PCM_CHANNEL_REAR_RIGHT_OUT = 5;
-	static const int PCM_CHANNEL_REAR_RIGHT_IN = 5;
+	static const int PCM_CHANNEL_REAR_RIGHT = 3;
+	static const int PCM_CHANNEL_REAR_RIGHT_OUT = 3;
+	static const int PCM_CHANNEL_REAR_RIGHT_IN = 3;
 
 	static const int PCM_CHANNEL_EJECT_LEFT = 0;
 	static const int PCM_CHANNEL_EJECT_LEFT_OUT = 0;
@@ -48,6 +44,12 @@ public:
 	static const int PCM_CHANNEL_LATCH_IN = 6;
 //End Pneumatics-----------------------------------
 
+	static const int pidChannel = 0;
+
+//Start Motor Controller IDs-----------------------
+	static const int LeftLeaderID = 21;
+	static const int LeftFollowerID = 22;
+
 	static const int RightLeaderID = 11;
 	static const int RightFollowerID = 12;
 
@@ -55,6 +57,7 @@ public:
 	static const int IntakeFollowerID = 41;
 
 	static const int ArmLeaderID = 32;
+//End Motor Controller IDs-----------------------------------
 
 	static constexpr double pulsesPerRotationQuad = 8192;
 	static constexpr double circumference = 8 * 3.14;
@@ -73,6 +76,9 @@ public:
 
 	static constexpr double rightMotionVel = 6000;
 	static constexpr double rightMotionAcc = 2000;
+
+	static constexpr double armMotionVel = 2000;
+	static constexpr double armMotionAcc = 750;
 
 	static constexpr int MAX_AUTON_INSTRUCTIONS = 100;
 

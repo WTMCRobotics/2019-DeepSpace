@@ -25,6 +25,7 @@
 #include <frc/PIDController.h>
 
 #include <stdio.h> 
+#include <signal.h>
 #include <stdlib.h> 
 #include <unistd.h> 
 #include <string.h> 
@@ -33,6 +34,7 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h>
 #include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <frc/DoubleSolenoid.h>
 #include <frc/Compressor.h>
 #include <sstream>
@@ -47,6 +49,11 @@
 
 using namespace frc;
 using namespace std;
+
+void sighandler(int signal) {
+	std::cout << "Caught signal " << signal << "! Exiting.\n";
+	exit(signal);
+}
 
 class Robot : public frc::TimedRobot {
 
@@ -134,6 +141,7 @@ private:
 
 	float AllowedAngleError = 2.0;
 
+	int currArmPos;
 	//raspi input
 	vision_frame_t frame;
 
@@ -208,12 +216,14 @@ public:
 
 	static void CameraServerLoop() {
 		try {
-			cs::CvSource outputStreamStd = CameraServer::GetInstance()->PutVideo("Vision Camera", 640, 480);
+			CameraServer * serv = CameraServer::GetInstance();
+			cs::CvSource outputStreamStd = serv->PutVideo("Vision Camera", 640, 480);
+			outputStreamStd.SetFPS(10);
+			outputStreamStd.SetConnected(true);
 			int sockfd, newsockfd, clilen;
-			char buffer[256];
+			char * buffer = (char*)malloc(640*480*3 + 512);
 			struct sockaddr_in serv_addr, cli_addr;
 			int n;
-			std::stringstream ss;
 			sockfd = socket(AF_INET, SOCK_STREAM, 0);
 			if (sockfd < 0) 
 				return CameraError("Could not open socket");
@@ -243,14 +253,13 @@ public:
 				return CameraError("Could not accept connection");
 			std::cout << "Accepted connection";
 			std::cout.flush();
-			//bzero(buffer,256);
+			bzero(buffer,256);
 			cameraLoopStatus = true;
 			std::cout << "Connected to raspi.\n";
 			long long count = 0;
 			while (true) {
-				n = read(newsockfd,buffer,256);
+				n = read(newsockfd, buffer + count, 256);
 				if (n < 0) return CameraError("Could not read camera data!");
-				ss.write(buffer, n);
 				count += n;
 				/*if (strlen(buffer) == 0) {
 					int cont = 1;
@@ -261,16 +270,21 @@ public:
 						goto Restart;
 					}
 				}*/
+				//std::cout << count << "\n";
 				if (count >= 640*480*3) {
 					std::cout << "Got frame from pi\n";
-					char imbuffer[640*480*3];
-					ss.read(imbuffer, 640*480*3);
-					cv::Mat image(cv::Size(640, 480), CV_8UC3, imbuffer, cv::Mat::AUTO_STEP);
-					outputStreamStd.PutFrame(image);
+					cv::Mat image(cv::Size(640, 480), CV_8UC3, buffer, cv::Mat::AUTO_STEP);
+					cv::Mat newimage;
+					cv::resize(image, newimage, cv::Size(320, 240));
+					outputStreamStd.PutFrame(newimage);
 					count -= 640*480*3;
+					std::cout << count << "\n";
+					char tmp[512];
+					memcpy(tmp, &buffer[640*480*3], count);
+					bzero(buffer, 640*480*3 + 512);
+					memcpy(buffer, tmp, count);
 				}
 				//this line of code makes things crash--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-				//bzero(buffer, 256);
 			}
 		} catch (std::exception e) {
 			std::cout << "Got exception: " << e.what() << "\n";
@@ -284,19 +298,20 @@ public:
 
 	//this gets called once at the beggining of the match
 	void RobotInit() {
+		for (int s = 0; s < 32; s++) signal(s, sighandler);
 		SetupMoters();
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 		serial_port.SetTimeout(.05);
 		serial_port.Reset();
-		try {
+		/*try {
 	    	cameraThread = std::thread(CameraServerLoop);
 			cameraThread.detach();
 		} catch (std::exception e) {
 			std::cout << "Could not start camera thread\n";
 			cameraLoopStatus = false;
-		}
+		}*/
 		lowerLimitSwitch = new DigitalInput(0);
 		uperLimitSwitch = new DigitalInput(1);
 		latchLimitSwitch = new DigitalInput(2);
@@ -401,11 +416,19 @@ public:
 		armLeader.ConfigPeakOutputForward(1, 0);
 		armLeader.ConfigPeakOutputReverse(-1, 0);
 		armLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		armLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
-		armLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		armLeader.ConfigMotionCruiseVelocity(Constant::armMotionVel, 0);
+		armLeader.ConfigMotionAcceleration(Constant::armMotionAcc, 0);
 		armLeader.SetSensorPhase(false);
 		armLeader.SetInverted(false);
 
+		double ap = 0.65;
+		double ai = 0;
+		double ad = 0.484;
+
+		armLeader.Config_kP(Constant::pidChannel, ap, 0);
+		armLeader.Config_kI(Constant::pidChannel, ai, 0);
+		armLeader.Config_kD(Constant::pidChannel, ad, 0);
+		armLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 	}
 
 	/*
@@ -439,7 +462,7 @@ public:
 
 	//this code does nothing in 2019
 	void AutonomousPeriodic() {
-		Drive();
+		TeleopPeriodic();
 		if (m_autoSelected == kAutoNameCustom) {
 			// Custom Auto goes here
 		} else {
@@ -447,7 +470,7 @@ public:
 		}
 	}
 
-	//is called once at the begining of the mathc in 2019
+	//is called once at the begining of the match in 2019
 	void TeleopInit() {
 		CalibrateGyro();
 		ResetEncoders();
@@ -486,18 +509,21 @@ public:
 
 			if(codriverY < -15) {
 				if(!lowerLimitSwitch->Get()) {
-					armLeader.Set(ControlMode::PercentOutput, codriverY * 0.1);
+					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, codriverY * 0.1);
+					currArmPos = armLeader.GetSelectedSensorPosition();
 				} else {
-					armLeader.Set(ControlMode::PercentOutput, 0);
+					armLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);
+					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 				}
 			} else if(codriverY > 15) {
 				if(!uperLimitSwitch->Get()){
-					armLeader.Set(ControlMode::PercentOutput, codriverY * 0.5);
+					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, codriverY * 0.5);
+					currArmPos = armLeader.GetSelectedSensorPosition();
 				} else {
-					armLeader.Set(ControlMode::PercentOutput, 0);
+					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 				}
 			} else {
-				armLeader.Set(ControlMode::PercentOutput, 0);
+				armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, currArmPos);
 			}
 
 			if(leftShoulder) {
@@ -510,9 +536,21 @@ public:
 				dockRobot2Running = false;
 			}
 
+			if (XButton) {
+				SetPistonExtended(Constant::PCM_CHANNEL_FRONT_LEFT, true);
+			} else {
+				SetPistonExtended(Constant::PCM_CHANNEL_FRONT_LEFT, false);
+			}
+
+			if (BButton) {
+				SetPistonExtended(Constant::PCM_CHANNEL_REAR_LEFT, true);
+			} else {
+				SetPistonExtended(Constant::PCM_CHANNEL_REAR_LEFT, false);
+			}
+
 			//if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
 			if(BButton){
-				PlaceHatch();
+				//PlaceHatch();
 
 			} else if(isAuton) {
 				
@@ -1067,6 +1105,10 @@ public:
 		return false; // unimplemented
 	}
 
+	void setArmPosition(float targetPos) {
+		armLeader.Set(ControlMode::MotionMagic, targetPos);
+		currArmPos = armLeader.GetSelectedSensorPosition();
+	}
 	//sets "pistonID" to extended if true and retracted if false
 	//TODO
 	void SetPistonExtended(int pistonID, bool value){
@@ -1251,13 +1293,6 @@ public:
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
 		}
-	}
-
-	//call every tick to set the arm angle to "angle"
-	//TODO
-	bool SetArmAngle(float angle){
-		//returns true when done
-		return false; // unimplemented
 	}
 
 	// call every tick to put the orange ball in a cargoship/rocket
