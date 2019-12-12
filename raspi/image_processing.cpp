@@ -661,7 +661,7 @@ ErrorLine:
         frameChecksum(frames);
 
         // send data out
-        if (::write(serout, &frames, 16) != 16) ::write(serout, &empty_frame, 16);
+        if (::write(serout, &frames, 18) != 18) ::write(serout, &empty_frame, 18;
 
         // output final image
         outputImage(frame, success);

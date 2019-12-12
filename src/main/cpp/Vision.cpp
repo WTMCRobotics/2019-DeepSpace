@@ -4,11 +4,14 @@
 #include <bitset>
 #define VISION_DEBUG
 
+vision_info_t nullinfo = {VISION_INFO, 160.0, "\0\0\0\0\0\0\0", 0, VISION_ERROR_NO_DATA};
+
 vision_frame_t getFrame(frc::SerialPort &serial) {
     vision_frame_t frame;
     frame.error = 0;
     if (serial.StatusIsFatal()) {
-        //std::cout << "Serial is not available\n";
+        std::cout << "Serial is not available\n";
+        frame.error = VISION_ERROR_NO_DATA;
         return frame;
     }
     while (true) {
@@ -44,7 +47,7 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
         // It aligns, read the rest
         ((char*)&frame)[0] = byte1;
         ((char*)&frame)[1] = byte2;
-        for (int i = 2; i < 18; i++) {
+        for (int i = 2; i < 16; i++) {
             serial.Read(&((char*)&frame)[i], 1);
             //std::cout << (int)((char*)&frame)[i] << " ";
         }
@@ -59,7 +62,7 @@ vision_frame_t getFrame(frc::SerialPort &serial) {
             frames16[4] + frames16[5] + frames16[6] + frames16[7] + frames16[8];
         uint16_t sum = ~((uint16_t)(subsum & 0xFFFF) + (uint16_t)(subsum >> 16));
         //std::cout << "\n" << subsum << " " << sum;
-        if (sum != 0) frame.error |= VISION_ERROR_BAD_CHECKSUM;
+        //if (sum != 0) frame.error |= VISION_ERROR_BAD_CHECKSUM;
         //std::cout << std::dec << " " << std::bitset<8>(frame.error) << "\n";
         return frame;
     }
@@ -70,6 +73,10 @@ vision_info_t getInfo(vision_frame_t frame) {
 }
 
 vision_info_t incrementThreshold(frc::SerialPort &serial) {
+    if (serial.StatusIsFatal()) {
+        std::cout << "Serial is not available\n";
+        return nullinfo;
+    }
     serial.Write("+", 1);
     while (true) {
         vision_frame_t frame = getFrame(serial);
@@ -78,6 +85,10 @@ vision_info_t incrementThreshold(frc::SerialPort &serial) {
 }
 
 vision_info_t decrementThreshold(frc::SerialPort &serial) {
+    if (serial.StatusIsFatal()) {
+        std::cout << "Serial is not available\n";
+        return nullinfo;
+    }
     serial.Write("-", 1);
     while (true) {
         vision_frame_t frame = getFrame(serial);
@@ -98,6 +109,10 @@ std::string getVisionError(vision_frame_t frame) {
 }
 
 vision_info_t calibrateVision(frc::SerialPort &serial) {
+    if (serial.StatusIsFatal()) {
+        std::cout << "Serial is not available\n";
+        return nullinfo;
+    }
     serial.Write("c", 1);
     while (true) {
         vision_frame_t frame = getFrame(serial);

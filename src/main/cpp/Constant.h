@@ -13,19 +13,14 @@ class Constant
 {
 public:
 //Pneumatics------------------------------------
-	static const int PCM_ID = 0;
+	static const int PCM_ID = 1;
 
-	static const int PCM_CHANNEL_FRONT_LEFT = 2;
-	static const int PCM_CHANNEL_FRONT_LEFT_OUT = 2;
-	static const int PCM_CHANNEL_FRONT_LEFT_IN = 2;
+	static const int PCM_CHANNEL_FRONT = 2;
 
-	static const int PCM_CHANNEL_FRONT_RIGHT = 2;
-	static const int PCM_CHANNEL_FRONT_RIGHT_OUT = 2;
-	static const int PCM_CHANNEL_FRONT_RIGHT_IN = 2;
+	static const int PCM_EJECT_IN = 1;
+	static const int PCM_EJECT_OUT = 0;
 
-	static const int PCM_CHANNEL_REAR_LEFT = 3;
-	static const int PCM_CHANNEL_REAR_LEFT_OUT = 3;
-	static const int PCM_CHANNEL_REAR_LEFT_IN = 3;
+	static const int PCM_CHANNEL_REAR = 3;
 
 	static const int PCM_CHANNEL_REAR_RIGHT = 3;
 	static const int PCM_CHANNEL_REAR_RIGHT_OUT = 3;
@@ -35,13 +30,9 @@ public:
 	static const int PCM_CHANNEL_EJECT_LEFT_OUT = 0;
 	static const int PCM_CHANNEL_EJECT_LEFT_IN = 0;
 
-	static const int PCM_CHANNEL_EJECT_RIGHT = 1;
-	static const int PCM_CHANNEL_EJECT_RIGHT_OUT = 1;
-	static const int PCM_CHANNEL_EJECT_RIGHT_IN = 1;
-
-	static const int PCM_CHANNEL_LATCH = 6;
-	static const int PCM_CHANNEL_LATCH_OUT = 6;
-	static const int PCM_CHANNEL_LATCH_IN = 6;
+	static const int PCM_CHANNEL_LATCH = 4;
+	static const int PCM_CHANNEL_LATCH_OUT = 4;
+	static const int PCM_CHANNEL_LATCH_IN = 5;
 //End Pneumatics-----------------------------------
 
 	static const int pidChannel = 0;
@@ -77,10 +68,14 @@ public:
 	static constexpr double rightMotionVel = 6000;
 	static constexpr double rightMotionAcc = 2000;
 
-	static constexpr double armMotionVel = 2000;
+	static constexpr double armMotionVel = 1000;
 	static constexpr double armMotionAcc = 750;
 
 	static constexpr int MAX_AUTON_INSTRUCTIONS = 100;
+
+	static constexpr int ARM90DEGREES = -2001;
+	static constexpr int ARMSTORAGE = -2670;
+	static constexpr int ARMDOWN = 50;
 
 	//Robot propeties
 	static constexpr float DIST_FROM_RIGHT_WEEL_TO_LEFT_WEEL = 2.0;  //TODO set this to correct value

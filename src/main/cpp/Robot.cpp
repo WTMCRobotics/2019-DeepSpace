@@ -37,6 +37,7 @@
 #include <opencv2/opencv.hpp>
 #include <frc/DoubleSolenoid.h>
 #include <frc/Compressor.h>
+#include <frc/Solenoid.h>
 #include <sstream>
 #define PORT    3805
 #define MAXLINE 1024 
@@ -67,8 +68,8 @@ private:
 
 	frc::XboxController xboxController{0};
 	frc::XboxController guitar{1};
+	frc::Joystick joystick{2};
 
-	frc::Joystick joystick{1};
 	//Joystick joystick2, joystick2;
 	double leftjoyY;
 	double rightjoyY;
@@ -117,6 +118,15 @@ private:
 	bool gbuttonDown;
 	bool gbuttonUp;
 
+	bool extended = false;
+	bool retracted = true;
+
+	bool rextended = false;
+	bool rretracted = true;
+
+	bool latchIsOut;
+	bool latchWasOut;
+
 	static const int GREEN = 1;
 	static const int RED = 2;
 	static const int YELLOW = 4;
@@ -140,22 +150,25 @@ private:
 	bool waiting = false;
 
 	float AllowedAngleError = 2.0;
+	int ejectTrigger;
 
-	int currArmPos;
+	//Demo
+	bool slowModeEnabled = true;
+	
 	//raspi input
 	vision_frame_t frame;
 
 	AHRS* pGyro = new AHRS(frc::SPI::Port::kMXP);
 
-	TalonSRX leftLeader {Constant::LeftLeaderID};
-	TalonSRX leftFollower {Constant::LeftFollowerID};
-	TalonSRX rightLeader {Constant::RightLeaderID};
-	TalonSRX rightFollower {Constant::RightFollowerID};
+	TalonSRX leftMaster {Constant::LeftMasterID};
+	TalonSRX leftSlave {Constant::LeftSlaveID};
+	TalonSRX rightMaster {Constant::RightMasterID};
+	TalonSRX rightSlave {Constant::RightSlaveID};
 
-	TalonSRX intakeLeader {Constant::IntakeLeaderID};
-	TalonSRX intakeFollower {Constant::IntakeFollowerID};
+	TalonSRX intakeMaster {Constant::IntakeMasterID};
+	TalonSRX intakeSlave {Constant::IntakeSlaveID};
 
-	TalonSRX armLeader {Constant::ArmLeaderID};
+	TalonSRX armMaster {Constant::ArmMasterID};
 
 	DigitalInput* lowerLimitSwitch;
 	DigitalInput* uperLimitSwitch;
@@ -170,27 +183,31 @@ private:
 	static bool cameraLoopStatus;
 
 
-	frc::Compressor compresser {Constant::PCM_ID};
+	frc::Compressor compressor {Constant::PCM_ID};
 
-	frc::DoubleSolenoid frontLeftSol {Constant::PCM_CHANNEL_FRONT_LEFT_IN, Constant::PCM_CHANNEL_FRONT_LEFT_OUT};
+	//frc::DoubleSolenoid frontLeftSol {Constant::PCM_CHANNEL_FRONT_LEFT_IN, Constant::PCM_CHANNEL_FRONT_LEFT_OUT};
 	
-	frc::DoubleSolenoid frontRightSol {Constant::PCM_CHANNEL_FRONT_RIGHT_IN, Constant::PCM_CHANNEL_FRONT_RIGHT_OUT};
+	frc::Solenoid frontSol {1, Constant::PCM_CHANNEL_FRONT};
 
-	frc::DoubleSolenoid rearLeftSol {Constant::PCM_CHANNEL_REAR_LEFT_IN, Constant::PCM_CHANNEL_REAR_LEFT_OUT};
+	frc::Solenoid rearSol {1, Constant::PCM_CHANNEL_REAR};
 
-	frc::DoubleSolenoid rearRightSol {Constant::PCM_CHANNEL_REAR_RIGHT_IN, Constant::PCM_CHANNEL_REAR_RIGHT_OUT};
+	frc::DoubleSolenoid ejectSol {1, Constant::PCM_EJECT_IN, Constant::PCM_EJECT_OUT};
 
-	frc::DoubleSolenoid ejectLeftSol {Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
+	frc::DoubleSolenoid latchSol {1, Constant::PCM_CHANNEL_LATCH_OUT, Constant::PCM_CHANNEL_LATCH_IN};
 
-	frc::DoubleSolenoid ejectRightSol {Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
+	// frc::DoubleSolenoid rearRightSol {1, Constant::PCM_CHANNEL_REAR_RIGHT_IN, Constant::PCM_CHANNEL_REAR_RIGHT_OUT};
 
-	frc::DoubleSolenoid latchSol {Constant::PCM_CHANNEL_LATCH_IN, Constant::PCM_CHANNEL_LATCH_OUT};
+	// frc::DoubleSolenoid ejectLeftSol {1, Constant::PCM_CHANNEL_EJECT_LEFT_IN, Constant::PCM_CHANNEL_EJECT_LEFT_OUT};
 
-	
+	// frc::DoubleSolenoid ejectRightSol {1, Constant::PCM_CHANNEL_EJECT_RIGHT_IN, Constant::PCM_CHANNEL_EJECT_RIGHT_OUT};
+
+	// frc::DoubleSolenoid latchSol {1, Constant::PCM_CHANNEL_LATCH_IN, Constant::PCM_CHANNEL_LATCH_OUT};
+
+	int currArmPos;
 	double wheelsTarget;
 	//PID for turning
-	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
-	PIDGyroSource pidGyroSource { pGyro };
+	PIDMotorOutput pidMotorOutput { &leftMaster, &rightMaster };
+    PIDGyroSource pidGyroSource { pGyro };
 	//practice
 	PIDController pidAngle { 0.045, 0.0000001, 0.1, &pidGyroSource, &pidMotorOutput, 0.02 };
 	//compition
@@ -312,123 +329,125 @@ public:
 			std::cout << "Could not start camera thread\n";
 			cameraLoopStatus = false;
 		}*/
+		//CameraServer::GetInstance()->StartAutomaticCapture();
 		lowerLimitSwitch = new DigitalInput(0);
 		uperLimitSwitch = new DigitalInput(1);
 		latchLimitSwitch = new DigitalInput(2);
 		isPractice = new DigitalInput(3);
-	
+
+		currArmPos = armMaster.GetSelectedSensorPosition();
 	}
 
 	//configures the motors should be called at begining of match
 	void SetupMoters() {
 		//Right motor setup
-		leftLeader.ClearStickyFaults(0);
-		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
-		leftLeader.ConfigNominalOutputForward(0, 0);
-		leftLeader.ConfigNominalOutputReverse(0, 0);
-		leftLeader.ConfigPeakOutputForward(1, 0);
-		leftLeader.ConfigPeakOutputReverse(-1, 0);
-		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		leftLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
-		leftLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
-		leftLeader.SetSensorPhase(false);
-		leftLeader.SetInverted(false);
+		leftMaster.ClearStickyFaults(0);
+		//leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		leftMaster.ConfigNominalOutputForward(0, 0);
+		leftMaster.ConfigNominalOutputReverse(0, 0);
+		leftMaster.ConfigPeakOutputForward(1, 0);
+		leftMaster.ConfigPeakOutputReverse(-1, 0);
+		leftMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftMaster.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		leftMaster.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		leftMaster.SetSensorPhase(false);
+		leftMaster.SetInverted(false);
 
-		leftFollower.ConfigNominalOutputForward(0, 0);
-		leftFollower.ConfigNominalOutputReverse(0, 0);
-		leftFollower.ConfigPeakOutputForward(1, 0);
-		leftFollower.ConfigPeakOutputReverse(-1, 0);
-		leftFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		leftFollower.ConfigMotionCruiseVelocity(0, 0);
-		leftFollower.ConfigMotionAcceleration(0, 0);
-		leftFollower.SetSensorPhase(false);
-		leftFollower.SetInverted(false);
+		leftSlave.ConfigNominalOutputForward(0, 0);
+		leftSlave.ConfigNominalOutputReverse(0, 0);
+		leftSlave.ConfigPeakOutputForward(1, 0);
+		leftSlave.ConfigPeakOutputReverse(-1, 0);
+		leftSlave.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftSlave.ConfigMotionCruiseVelocity(0, 0);
+		leftSlave.ConfigMotionAcceleration(0, 0);
+		leftSlave.SetSensorPhase(false);
+		leftSlave.SetInverted(false);
 
 
 		//Right motor setup
-		rightLeader.ClearStickyFaults(0);
-		//rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
-		rightLeader.ConfigNominalOutputForward(0, 0);
-		rightLeader.ConfigNominalOutputReverse(0, 0);
-		rightLeader.ConfigPeakOutputForward(1, 0);
-		rightLeader.ConfigPeakOutputReverse(-1, 0);
-		rightLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		rightLeader.ConfigMotionCruiseVelocity(Constant::rightMotionVel, 0);
-		rightLeader.ConfigMotionAcceleration(Constant::rightMotionAcc, 0);
-		rightLeader.SetSensorPhase(false);
-		rightLeader.SetInverted(true);
+		rightMaster.ClearStickyFaults(0);
+		//rightMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		rightMaster.ConfigNominalOutputForward(0, 0);
+		rightMaster.ConfigNominalOutputReverse(0, 0);
+		rightMaster.ConfigPeakOutputForward(1, 0);
+		rightMaster.ConfigPeakOutputReverse(-1, 0);
+		rightMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightMaster.ConfigMotionCruiseVelocity(Constant::rightMotionVel, 0);
+		rightMaster.ConfigMotionAcceleration(Constant::rightMotionAcc, 0);
+		rightMaster.SetSensorPhase(false);
+		rightMaster.SetInverted(true);
 
-		rightFollower.ConfigNominalOutputForward(0, 0);
-		rightFollower.ConfigNominalOutputReverse(0, 0);
-		rightFollower.ConfigPeakOutputForward(1, 0);
-		rightFollower.ConfigPeakOutputReverse(-1, 0);
-		rightFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		rightFollower.ConfigMotionCruiseVelocity(0, 0);
-		rightFollower.ConfigMotionAcceleration(0, 0);
-		rightFollower.SetSensorPhase(false);
-		rightFollower.SetInverted(true);
+		rightSlave.ConfigNominalOutputForward(0, 0);
+		rightSlave.ConfigNominalOutputReverse(0, 0);
+		rightSlave.ConfigPeakOutputForward(1, 0);
+		rightSlave.ConfigPeakOutputReverse(-1, 0);
+		rightSlave.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightSlave.ConfigMotionCruiseVelocity(0, 0);
+		rightSlave.ConfigMotionAcceleration(0, 0);
+		rightSlave.SetSensorPhase(false);
+		rightSlave.SetInverted(true);
 		
 		double p = 0.65;
 		double i = 0.0000;
 		double d = 0.484;
 		// PID setup for driving a distance
-		leftLeader.Config_kP(Constant::pidChannel, p, 0);
-		leftLeader.Config_kI(Constant::pidChannel, i, 0);
-		leftLeader.Config_kD(Constant::pidChannel, d, 0);
-		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		leftMaster.Config_kP(Constant::pidChannel, p, 0);
+		leftMaster.Config_kI(Constant::pidChannel, i, 0);
+		leftMaster.Config_kD(Constant::pidChannel, d, 0);
+		leftMaster.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-		rightLeader.Config_kP(Constant::pidChannel, p, 0);
-		rightLeader.Config_kI(Constant::pidChannel, i, 0);
-		rightLeader.Config_kD(Constant::pidChannel, d, 0);
-		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		rightMaster.Config_kP(Constant::pidChannel, p, 0);
+		rightMaster.Config_kI(Constant::pidChannel, i, 0);
+		rightMaster.Config_kD(Constant::pidChannel, d, 0);
+		rightMaster.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
-		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+		rightSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Slave, Constant::RightMasterID);
+		leftSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Slave, Constant::LeftMasterID);
 
-		intakeLeader.ClearStickyFaults(0);
-		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
-		intakeLeader.ConfigNominalOutputForward(0, 0);
-		intakeLeader.ConfigNominalOutputReverse(0, 0);
-		intakeLeader.ConfigPeakOutputForward(1, 0);
-		intakeLeader.ConfigPeakOutputReverse(-1, 0);
-		intakeLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		intakeLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
-		intakeLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
-		intakeLeader.SetSensorPhase(false);
-		intakeLeader.SetInverted(false);
+		intakeMaster.ClearStickyFaults(0);
+		//leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		intakeMaster.ConfigNominalOutputForward(0, 0);
+		intakeMaster.ConfigNominalOutputReverse(0, 0);
+		intakeMaster.ConfigPeakOutputForward(1, 0);
+		intakeMaster.ConfigPeakOutputReverse(-1, 0);
+		intakeMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		intakeMaster.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		intakeMaster.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		intakeMaster.SetSensorPhase(false);
+		intakeMaster.SetInverted(false);
 
-		intakeFollower.ConfigNominalOutputForward(0, 0);
-		intakeFollower.ConfigNominalOutputReverse(0, 0);
-		intakeFollower.ConfigPeakOutputForward(1, 0);
-		intakeFollower.ConfigPeakOutputReverse(-1, 0);
-		intakeFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		intakeFollower.ConfigMotionCruiseVelocity(0, 0);
-		intakeFollower.ConfigMotionAcceleration(0, 0);
-		intakeFollower.SetSensorPhase(false);
-		intakeFollower.SetInverted(false);
+		intakeSlave.ConfigNominalOutputForward(0, 0);
+		intakeSlave.ConfigNominalOutputReverse(0, 0);
+		intakeSlave.ConfigPeakOutputForward(1, 0);
+		intakeSlave.ConfigPeakOutputReverse(-1, 0);
+		intakeSlave.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		intakeSlave.ConfigMotionCruiseVelocity(0, 0);
+		intakeSlave.ConfigMotionAcceleration(0, 0);
+		intakeSlave.SetSensorPhase(false);
+		intakeSlave.SetInverted(false);
 
-		//intakeFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::IntakeLeaderID);
+		//intakeSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Slave, Constant::IntakeMasterID);
 
-		armLeader.ClearStickyFaults(0);
-		//leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
-		armLeader.ConfigNominalOutputForward(0, 0);
-		armLeader.ConfigNominalOutputReverse(0, 0);
-		armLeader.ConfigPeakOutputForward(1, 0);
-		armLeader.ConfigPeakOutputReverse(-1, 0);
-		armLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		armLeader.ConfigMotionCruiseVelocity(Constant::armMotionVel, 0);
-		armLeader.ConfigMotionAcceleration(Constant::armMotionAcc, 0);
-		armLeader.SetSensorPhase(false);
-		armLeader.SetInverted(false);
+		armMaster.ClearStickyFaults(0);
+		//leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		armMaster.ConfigNominalOutputForward(0, 0);
+		armMaster.ConfigNominalOutputReverse(0, 0);
+		armMaster.ConfigPeakOutputForward(1, 0);
+		armMaster.ConfigPeakOutputReverse(-1, 0);
+		armMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		armMaster.ConfigMotionCruiseVelocity(Constant::armMotionVel, 0);
+		armMaster.ConfigMotionAcceleration(Constant::armMotionAcc, 0);
+		armMaster.SetSensorPhase(false);
+		armMaster.SetInverted(false);
 
 		double ap = 0.65;
 		double ai = 0;
 		double ad = 0.484;
 
-		armLeader.Config_kP(Constant::pidChannel, ap, 0);
-		armLeader.Config_kI(Constant::pidChannel, ai, 0);
-		armLeader.Config_kD(Constant::pidChannel, ad, 0);
-		armLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		armMaster.Config_kP(Constant::pidChannel, ap, 0);
+		armMaster.Config_kI(Constant::pidChannel, ai, 0);
+		armMaster.Config_kD(Constant::pidChannel, ad, 0);
+		armMaster.Config_IntegralZone(Constant::pidChannel, 0, 0);
 	}
 
 	/*
@@ -447,6 +466,7 @@ public:
 
 	//this does nothing in 2019
 	void AutonomousInit() override {
+		currArmPos = armMaster.GetSelectedSensorPosition();
 		m_autoSelected = m_chooser.GetSelected();
 
 		// m_autoSelected = SmartDashboard::GetString("Auto Selector",
@@ -475,23 +495,36 @@ public:
 		CalibrateGyro();
 		ResetEncoders();
 		ResetGyro();
+		currArmPos = armMaster.GetSelectedSensorPosition();
 	}
 
 	//this code gets call once every tick or about 50 times per second
 	void TeleopPeriodic() {
+		UpdateCompressor();
 		if(!waiting){
 			Drive();
+			//TestStuff();
 			//cout << DriveDistance(6 * 3.14, 1) << endl;
 			//DriveDistance(1, 1);
 			//cout << gyro->GetAngle() << endl;
-			//cout << rightLeader.GetSelectedSensorPosition() << endl;
-			//cout << leftLeader.GetSelectedSensorPosition() << endl;
+			//cout << rightMaster.GetSelectedSensorPosition() << endl;
+			//cout << leftMaster.GetSelectedSensorPosition() << endl;
 		}
 	}
 
 	//this gets called every tick and contans all the drivetrain related code
+
+	void TestStuff() {
+		cout << "TestStuffCalled" << endl;
+		UpdateCompressor();
+		SetPistonExtended(4, true);
+	}
+
+
+
 	void Drive() {
-		// cout << "arm encoder" << armLeader.GetSelectedSensorPosition() << endl;
+		UpdateCompressor();
+		// cout << "arm encoder" << armMaster.GetSelectedSensorPosition() << endl;
 		// cout << "dio lower: " << lowerLimitSwitch->Get() << endl;
 		// cout << "dio upper: " << uperLimitSwitch->Get() << endl;
 		if(!waiting){
@@ -499,33 +532,89 @@ public:
 			//UpdateRaspiInput();
 			//cout << pGyro->GetYaw() << endl;
 
-			if(AButton) {
-				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, true);
-				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, true);
+			// if(AButton) {
+			// 	SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, true);
+			// 	SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, true);
+			// } else {
+			// 	SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, false);
+			// 	SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, false);
+			// }
+			bool guitarArmControl = false;
+
+			// if (gbuttonAltOrange) {
+			// 	if(!lowerLimitSwitch->Get()){
+			// 		setArmPosition(Constant::ARMDOWN);
+			// 		cout << "516\n";
+			// 		guitarArmControl = true;
+			// 	} else {
+			// 		cout << "518\n";
+			// 	}
+			// } else if (gbuttonAltBlue) {
+			// 	setArmPosition(Constant::ARM90DEGREES);
+			// 	currArmPos = armMaster.GetSelectedSensorPosition();
+			// 	cout << "523\n";
+			// 	guitarArmControl = true;
+			// } else if (gbuttonAltYellow) {
+			// 	if(uperLimitSwitch->Get()){
+			// 		setArmPosition(Constant::ARMSTORAGE);
+			// 		cout << "528\n";
+			// 		guitarArmControl = true;
+			// 	} else {
+			// 		cout << "530\n";
+			// 	}
+			// }
+			// cout << "GuitarArmControl: " << guitarArmControl << endl;
+
+			if (ejectTrigger) {
+				ejectSol.Set(frc::DoubleSolenoid::Value::kReverse);
 			} else {
-				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_LEFT, false);
-				SetPistonExtended(Constant::PCM_CHANNEL_EJECT_RIGHT, false);
+				ejectSol.Set(frc::DoubleSolenoid::Value::kForward);
 			}
 
-			if(codriverY < -15) {
+			if((codriverY < -0.1 || gbuttonOrange) /*&& (!latchIsOut)*/) {
 				if(!lowerLimitSwitch->Get()) {
-					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, codriverY * 0.1);
-					currArmPos = armLeader.GetSelectedSensorPosition();
+					if (gbuttonAltOrange) {
+						if (currArmPos < -1500) {
+							armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						} else {
+							armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.3);
+						}
+					} else {
+						armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -codriverY * 0.5);
+					}
+					currArmPos = armMaster.GetSelectedSensorPosition();
+					//cout << "518" << endl;
 				} else {
-					armLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);
-					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					if (!guitarArmControl) {
+						armMaster.SetSelectedSensorPosition(0, Constant::pidChannel, 50);
+						armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					}
+					//cout << "522" << endl;
 				}
-			} else if(codriverY > 15) {
-				if(!uperLimitSwitch->Get()){
-					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, codriverY * 0.5);
-					currArmPos = armLeader.GetSelectedSensorPosition();
+			} else if((codriverY > 0.1 || gbuttonAltYellow) /*&& (!latchIsOut)*/) {
+				if(uperLimitSwitch->Get()){
+					if (gbuttonAltYellow) {
+						if (currArmPos < Constant::ARM90DEGREES) {
+							armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -0.1);
+						} else {
+							armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -0.5);
+						}
+					} else {
+						armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -codriverY * 0.5);
+					}
+					currArmPos = armMaster.GetSelectedSensorPosition();
+					//cout << "528" << endl;
 				} else {
-					armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+				//cout << "531" << endl;
 				}
 			} else {
-				armLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, currArmPos);
+				if (!guitarArmControl) {
+					armMaster.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, currArmPos);
+				//cout << "533" << endl;
+				}
 			}
-
+			cout << armMaster.GetSelectedSensorPosition() << endl;
 			if(leftShoulder) {
 				isAuton=true;
 			} else {
@@ -537,22 +626,21 @@ public:
 			}
 
 			if (XButton) {
-				SetPistonExtended(Constant::PCM_CHANNEL_FRONT_LEFT, true);
+				cout << "Extending 4" << endl;
+				SetPistonExtended(Constant::PCM_CHANNEL_FRONT, true);
 			} else {
-				SetPistonExtended(Constant::PCM_CHANNEL_FRONT_LEFT, false);
+				cout << "Retracting 4" << endl;
+				SetPistonExtended(Constant::PCM_CHANNEL_FRONT, false);
 			}
 
 			if (BButton) {
-				SetPistonExtended(Constant::PCM_CHANNEL_REAR_LEFT, true);
+				SetPistonExtended(Constant::PCM_CHANNEL_REAR, true);
 			} else {
-				SetPistonExtended(Constant::PCM_CHANNEL_REAR_LEFT, false);
+				SetPistonExtended(Constant::PCM_CHANNEL_REAR, false);
 			}
 
 			//if (!cameraLoopStatus) std::cout << "Camera loop stopped!\n";
-			if(BButton){
-				//PlaceHatch();
-
-			} else if(isAuton) {
+			if(isAuton) {
 				
 				//gets of hab if on hab
 				if(!isOffHab) {
@@ -586,36 +674,41 @@ public:
 				pidAngle.Disable();
 				double amountToSlowBy = (1- (rightTrigger * 0.5)) * (1- (leftTrigger * 0.5));
 
+				if(slowModeEnabled){
+					amountToSlowBy /= 4;
+					std::cout << "Slow enabled\n";
+				}
 				leftTarget = leftjoyY * amountToSlowBy;
 				rightTarget = rightjoyY * amountToSlowBy;
 
 				
 				
 				//Set the motors to the motor targets
-				leftLeader.Set(ControlMode::PercentOutput, leftTarget);
-				rightLeader.Set(ControlMode::PercentOutput, -rightTarget);
+				leftMaster.Set(ControlMode::PercentOutput, leftTarget);
+				rightMaster.Set(ControlMode::PercentOutput, -rightTarget);
 				//cout << "Intake: " << intake << endl;
 				if(intake != -1) {
 					//cout << "Intake setting" << endl;
-					intakeLeader.Set(ControlMode::PercentOutput, -wheelsTarget);
-					intakeFollower.Set(ControlMode::PercentOutput, -wheelsTarget);
+					intakeMaster.Set(ControlMode::PercentOutput, -wheelsTarget);
+					intakeSlave.Set(ControlMode::PercentOutput, -wheelsTarget);
 				} else {
 					//cout << "STOP INTAKE" << endl;
-					intakeLeader.Set(ControlMode::PercentOutput, 0);
-					intakeFollower.Set(ControlMode::PercentOutput, 0);
+					intakeMaster.Set(ControlMode::PercentOutput, 0);
+					intakeSlave.Set(ControlMode::PercentOutput, 0);
 				
 				}
-				//intakeLeader.Set(ControlMode::PercentOutput, intake);
+				//intakeMaster.Set(ControlMode::PercentOutput, intake);
 				//cout << "intake: " << intake << endl;
 				//cout << "coDriverY: " << codriverY << endl;
 
-				if(latchButton) {
-					SetPistonExtended(Constant::PCM_CHANNEL_LATCH, true);
-				} else if (unLatchButton) {
-					SetPistonExtended(Constant::PCM_CHANNEL_LATCH, false);
+				if(joystick.GetRawButtonPressed(2)){
+					latchSol.Set(frc::DoubleSolenoid::Value::kReverse);
+					latchIsOut = true;
+				} else if(joystick.GetRawButtonReleased(2)){
+					latchSol.Set(frc::DoubleSolenoid::Value::kForward);
+					latchIsOut = false;
+					latchWasOut = true;  //not curently doning anything
 				}
-
-				
 
 				//gets things ready for when auton is enabled
 				ResetEncoders();	
@@ -650,24 +743,24 @@ public:
 					}
 
 					//Cargo Hatch Middle-Side
-					if(gbuttonRed){
-						//cout << "Red" << endl;
-						autonInstructions[1] = 66;
-						autonInstructions[2] = 22.37 * 12;
-						autonInstructions[3] = -156;
-						autonInstructions[4] = -4 * 12;
-						ShouldFollowInstructions = true;
-					}
+					// if(gbuttonRed){
+					// 	//cout << "Red" << endl;
+					// 	autonInstructions[1] = 66;
+					// 	autonInstructions[2] = 22.37 * 12;
+					// 	autonInstructions[3] = -156;
+					// 	autonInstructions[4] = -4 * 12;
+					// 	ShouldFollowInstructions = true;
+					// }
 
 					//Cargo Hatch Far-Side
-					if(gbuttonGreen){
-						//cout << "Green" << endl;
-						autonInstructions[1] = 68;
-						autonInstructions[2] = 24 * 12;
-						autonInstructions[3] = -158;
-						autonInstructions[4] = -4 * 12;
-						ShouldFollowInstructions = true;
-					}
+					// if(gbuttonGreen){
+					// 	//cout << "Green" << endl;
+					// 	autonInstructions[1] = 68;
+					// 	autonInstructions[2] = 24 * 12;
+					// 	autonInstructions[3] = -158;
+					// 	autonInstructions[4] = -4 * 12;
+					// 	ShouldFollowInstructions = true;
+					// }
 
 					//Rocket Hatch Far
 					if(gbuttonAltGreen){
@@ -746,6 +839,13 @@ public:
 						autonInstructions[4] = -4 * 12;
 						ShouldFollowInstructions = true;
 					}
+				} else {
+					if(gbuttonRed){
+						slowModeEnabled = false;
+					}
+					if(gbuttonGreen){
+						slowModeEnabled = true;
+					}
 				}
 			}
 		}
@@ -763,6 +863,8 @@ public:
 		codriverY = joystick.GetY();
 		intake = joystick.GetPOV();
 
+		ejectTrigger = joystick.GetTrigger();
+
 		if (intake >= 315 || intake <= 45) {
 			//slow for outtake
 			wheelsTarget = 1;
@@ -776,9 +878,9 @@ public:
 		runDockRobot = xboxController.GetBumper(frc::GenericHID::JoystickHand::kRightHand);
 		if (!runDockRobot) canRunDockRobot = true;
 		//if (!XButton && xboxController.GetXButton()) calibrateVision(serial_port);
-		if (xboxController.GetAButton()) incrementThreshold(serial_port);
-		if (xboxController.GetBButton()) decrementThreshold(serial_port);
-		if (!nextCameraButton && xboxController.GetYButton()) nextCamera(serial_port);
+		//if (xboxController.GetAButton()) incrementThreshold(serial_port);
+		//if (xboxController.GetBButton()) decrementThreshold(serial_port);
+		//if (!nextCameraButton && xboxController.GetYButton()) nextCamera(serial_port);
 		AButton = xboxController.GetAButton();
 		BButton = xboxController.GetBButton();
 		XButton = xboxController.GetXButton();
@@ -787,8 +889,8 @@ public:
 		//dpadDown = xboxController.GetBButton();
 		dpadUp = (xboxController.GetPOV() == 0);
 		dpadDown = (xboxController.GetPOV() == 180);
-		nextCameraButton = xboxController.GetYButton();
-		if (xboxController.GetYButton()) serial_port.Reset();
+		//nextCameraButton = xboxController.GetYButton();
+		//if (xboxController.GetYButton()) serial_port.Reset();
 
 		latchButton = guitar.GetRawButton(3);
 		unLatchButton = guitar.GetRawButton(4);
@@ -922,6 +1024,22 @@ public:
 		//}
 	}
 
+
+	void UpdateCompressor()
+	{
+		// if not enough pressure
+		if(!compressor.GetPressureSwitchValue()) {
+			// Start compressor
+			compressor.Start();
+		}
+		// if enough pressure
+		else {
+			// Stop compressor
+			compressor.Stop();
+		}
+	} // END of UpdateCompressor() function
+
+
 	//clears all instructions in autonInstructions[]
 	void ClearAutonInstructions() {
 		for (int i = 0; i < Constant::MAX_AUTON_INSTRUCTIONS; i++) autonInstructions[i] = 0;
@@ -944,12 +1062,12 @@ public:
 
 		int targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
 
-		if (AutonPositionDeadband(leftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		if (AutonPositionDeadband(leftMaster.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
+			leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+			rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
 		}
-		//cout << "rightLeader.GetSelectedSensorPosition(): " << rightLeader.GetSelectedSensorPosition() << endl;
+		//cout << "rightMaster.GetSelectedSensorPosition(): " << rightMaster.GetSelectedSensorPosition() << endl;
 
 		if(speed > 1){
 			speed = 1;
@@ -957,13 +1075,13 @@ public:
 		if(speed <= 0.01) {
 			speed = 0.01;
 		}
-		leftLeader.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
-		rightLeader.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
-		leftLeader.ConfigMotionAcceleration((1 / speed) * Constant::leftMotionAcc);
+		leftMaster.ConfigMotionCruiseVelocity(speed * Constant::leftMotionVel);
+		rightMaster.ConfigMotionCruiseVelocity(speed * Constant::rightMotionVel);
+		leftMaster.ConfigMotionAcceleration((1 / speed) * Constant::leftMotionAcc);
 		cout << (0.5 / speed) * Constant::leftMotionAcc << endl;
-		rightLeader.ConfigMotionAcceleration((1 / speed) * Constant::rightMotionAcc);
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
+		rightMaster.ConfigMotionAcceleration((1 / speed) * Constant::rightMotionAcc);
+		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
+		rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
 		return false;
 	}
@@ -981,8 +1099,8 @@ public:
 	//sets encoder position to zero
 	void ResetEncoders() {
 		//this will reset the progress of DriveDistance()
-		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);  // 50 is the number of ms before it times out
-		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 50);  // 50 is the number of ms before it times out
+		leftMaster.SetSelectedSensorPosition(0, Constant::pidChannel, 50);  // 50 is the number of ms before it times out
+		rightMaster.SetSelectedSensorPosition(0, Constant::pidChannel, 50);  // 50 is the number of ms before it times out
 	}
 
 	//call this once per tick to dive "targetDistance" inches away from the end of the line
@@ -1106,62 +1224,88 @@ public:
 	}
 
 	void setArmPosition(float targetPos) {
-		armLeader.Set(ControlMode::MotionMagic, targetPos);
-		currArmPos = armLeader.GetSelectedSensorPosition();
+		armMaster.Set(ControlMode::MotionMagic, targetPos);
+		currArmPos = armMaster.GetSelectedSensorPosition();
 	}
 	//sets "pistonID" to extended if true and retracted if false
 	//TODO
 	void SetPistonExtended(int pistonID, bool value){
 		switch(pistonID) {
-			case Constant::PCM_CHANNEL_FRONT_LEFT:
+			// case Constant::PCM_CHANNEL_FRONT_LEFT:
+			// 	if(value) {
+			// 		frontLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+			// 	} else {
+			// 		frontLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+			// 	}
+			// 	break;
+			case Constant::PCM_CHANNEL_FRONT:
+				cout << "FRONT EXTENDED" << endl;
+				cout << "VALUE: " << value << endl;
 				if(value) {
-					frontLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+					if (retracted) {
+						frontSol.Set(true);
+						extended = true;
+						retracted = false;
+						cout << "Extending" << endl;
+					}
 				} else {
-					frontLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+					if (extended) {
+						frontSol.Set(false);
+						extended = false;
+						retracted = true;
+
+						cout << "Retracting" << endl;
+					}
+					
 				}
 				break;
-			case Constant::PCM_CHANNEL_FRONT_RIGHT:
+			// case Constant::PCM_CHANNEL_REAR_LEFT:
+			// 	if(value) {
+			// 		rearLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+			// 	} else {
+			// 		rearLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+			// 	}
+			// 	break;
+			case Constant::PCM_CHANNEL_REAR:
 				if(value) {
-					frontRightSol.Set(frc::DoubleSolenoid::Value::kForward);
+					if (rretracted) {
+						rearSol.Set(true);
+						rextended = true;
+						rretracted = false;
+						cout << "Extending" << endl;
+					}
 				} else {
-					frontRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
+					if (rextended) {
+						rearSol.Set(false);
+						rextended = false;
+						rretracted = true;
+
+						cout << "Retracting" << endl;
+					}
+					
 				}
 				break;
-			case Constant::PCM_CHANNEL_REAR_LEFT:
+			case Constant::PCM_EJECT_IN:
 				if(value) {
-					rearLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
+					ejectSol.Set(frc::DoubleSolenoid::Value::kForward);
 				} else {
-					rearLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
+					ejectSol.Set(frc::DoubleSolenoid::Value::kReverse);
 				}
 				break;
-			case Constant::PCM_CHANNEL_REAR_RIGHT:
-				if(value) {
-					rearRightSol.Set(frc::DoubleSolenoid::Value::kForward);
-				} else {
-					rearRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
-				}
-				break;
-			case Constant::PCM_CHANNEL_EJECT_LEFT:
-				if(value) {
-					ejectLeftSol.Set(frc::DoubleSolenoid::Value::kForward);
-				} else {
-					ejectLeftSol.Set(frc::DoubleSolenoid::Value::kReverse);
-				}
-				break;
-			case Constant::PCM_CHANNEL_EJECT_RIGHT:
-				if(value) {
-					ejectRightSol.Set(frc::DoubleSolenoid::Value::kForward);
-				} else {
-					ejectRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
-				}
-				break;
-			case Constant::PCM_CHANNEL_LATCH:
-				if(value) {
-					latchSol.Set(frc::DoubleSolenoid::Value::kForward);
-				} else {
-					latchSol.Set(frc::DoubleSolenoid::Value::kReverse);
-				}
-				break;
+			// case Constant::PCM_CHANNEL_EJECT_RIGHT:
+			// 	if(value) {
+			// 		ejectRightSol.Set(frc::DoubleSolenoid::Value::kForward);
+			// 	} else {
+			// 		ejectRightSol.Set(frc::DoubleSolenoid::Value::kReverse);
+			// 	}
+			// 	break;
+			// case Constant::PCM_CHANNEL_LATCH:
+			// 	if(value) {
+			// 		latchSol.Set(frc::DoubleSolenoid::Value::kForward);
+			// 	} else {
+			// 		latchSol.Set(frc::DoubleSolenoid::Value::kReverse);
+			// 	}
+			// 	break;
 		}
 	}
 
@@ -1225,8 +1369,8 @@ public:
 
 	// Halts all motion.
 	void StopRobot() {
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 		ResetEncoders();
 		ResetGyro();
 	}
@@ -1288,10 +1432,10 @@ public:
 	void PlaceHatch(){
 		if(latchLimitSwitch->Get()) {
 			SetPistonExtended(Constant::PCM_CHANNEL_LATCH, true);
-			SetArmAngle(90);
+			//SetArmAngle(90);
 		} else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
+			leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
+			rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.2);
 		}
 	}
 
@@ -1305,10 +1449,10 @@ public:
 	//TODO
 	void EjectCargo(){
 		// for (int i = 0; i < 1000; i++) {
-		// 	armLeader.Set(ControlMode::PercentOutput, 1);
+		// 	armMaster.Set(ControlMode::PercentOutput, 1);
 		// }
 		
-		// armLeader.Set(ControlMode::PercentOutput, 0);
+		// armMaster.Set(ControlMode::PercentOutput, 0);
 		
 	}
 };
